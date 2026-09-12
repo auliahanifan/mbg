@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shortName, labelSpots } from './mapLabels';
+import { shortName, labelSpots, buildingSpots } from './mapLabels';
 
 describe('shortName', () => {
   it('abbreviates Indonesian street prefixes and ranks', () => {
@@ -51,5 +51,14 @@ describe('labelSpots', () => {
     expect(panjang.len).toBe(180);
     expect([30, 90, 150]).toContain(panjang.x);
     expect(lain.len).toBe(100);
+  });
+});
+
+describe('buildingSpots', () => {
+  const sq = (x: number, z: number, s: number, name?: string) => ({ p: [[x, z], [x + s, z], [x + s, z + s], [x, z + s]] as [number, number][], name });
+  it('labels named buildings in the window at their centroid, largest first', () => {
+    const spots = buildingSpots([sq(0, 0, 10, 'Toko'), sq(50, 50, 40, 'Mall'), sq(0, 0, 10), sq(900, 900, 50, 'Jauh')], 50, 50, 100);
+    expect(spots.map((s) => s.text)).toEqual(['Mall', 'Toko']);
+    expect(spots[0]).toMatchObject({ x: 70, z: 70, area: 1600 });
   });
 });

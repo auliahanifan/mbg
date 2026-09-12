@@ -45,3 +45,28 @@ export function labelSpots(data: Pick<CityData, 'nodes' | 'ways'>, cx: number, c
   }
   return [...best.values()].map(({ best: _best, ...spot }) => spot);
 }
+
+export interface BuildingSpot { text: string; x: number; z: number; area: number }
+
+/** Named buildings whose centroid lies in the window, largest first (the HUD drops overlapping ones in that order). */
+export function buildingSpots(buildings: { p: [number, number][]; name?: string }[], cx: number, cz: number, half: number): BuildingSpot[] {
+  const out: BuildingSpot[] = [];
+  for (const b of buildings) {
+    if (!b.name) continue;
+    let area = 0;
+    let x = 0;
+    let z = 0;
+    for (let i = 0; i < b.p.length; i++) {
+      const [ax, az] = b.p[i];
+      const [bx, bz] = b.p[(i + 1) % b.p.length];
+      area += ax * bz - bx * az;
+      x += ax;
+      z += az;
+    }
+    x /= b.p.length;
+    z /= b.p.length;
+    if (Math.abs(x - cx) > half || Math.abs(z - cz) > half) continue;
+    out.push({ text: b.name, x, z, area: Math.abs(area) / 2 });
+  }
+  return out.sort((a, b) => b.area - a.area);
+}

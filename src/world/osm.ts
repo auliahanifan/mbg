@@ -29,7 +29,7 @@ export type LineKind = 'rail' | 'river' | 'stream';
 export interface CityData {
   nodes: [number, number][];
   ways: { n: number[]; w: number; name?: string }[];
-  buildings: { p: [number, number][]; h: number; r?: Roof }[];
+  buildings: { p: [number, number][]; h: number; r?: Roof; name?: string }[];
   pois: CityPoi[];
   areas?: { p: [number, number][]; k: AreaKind }[]; // closed landuse / water rings
   lines?: { p: [number, number][]; k: LineKind }[]; // rail and waterways
@@ -256,7 +256,9 @@ export function buildCityData(elements: OsmElement[]): CityData {
     } else if (e.tags.building) {
       if (!closed) continue;
       const p = ring();
-      buildings.push({ p, ...classify(e.tags, p) });
+      const b: CityData['buildings'][number] = { p, ...classify(e.tags, p) };
+      if (e.tags.name) b.name = e.tags.name;
+      buildings.push(b);
     } else if (closed && areaKind(e.tags)) {
       const k = areaKind(e.tags)!;
       const p = ring();

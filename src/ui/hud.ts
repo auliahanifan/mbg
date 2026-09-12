@@ -2,7 +2,7 @@ import type { CarState } from '../vehicle/carPhysics';
 import { questText, questTarget, type Quest } from '../quest/quest';
 import { nearestEdge, type City } from '../world/city';
 import { routeField, pathFrom, type RouteField } from '../world/routing';
-import { labelSpots } from './mapLabels';
+import { labelSpots, buildingSpots } from './mapLabels';
 import { FLAT, type Ground } from '../world/terrain';
 
 const KMH_PER_UNIT = 3.6; // 1 unit = 1 m
@@ -37,7 +37,7 @@ export function createHud(city: City, ground: Ground = FLAT) {
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   const mg = root.querySelector<HTMLCanvasElement>('#map')!.getContext('2d')!;
   const SCALE = MAP_PX / MAP_M;
-  const { nodes, ways, areas = [], lines = [] } = city.data;
+  const { nodes, ways, buildings, areas = [], lines = [] } = city.data;
   const AREA_FILL: Record<string, string> = { grass: '#3f6b2a', wood: '#2f5522', farm: '#5c7a2e', water: '#2f5f73', sand: '#7d7150', paved: '#3a3d44' };
   let field: RouteField | null = null;
 
@@ -106,14 +106,31 @@ export function createHud(city: City, ground: Ground = FLAT) {
       mg.lineWidth = 3;
       mg.strokeStyle = 'rgba(8,12,24,.9)';
       mg.fillStyle = '#fff';
+      const placed: { x: number; y: number; w: number }[] = []; // label boxes in px (height ≈ 12), for overlap rejection
+      const free = (x: number, y: number, w: number) => !placed.some((p) => Math.abs(p.x - x) < (p.w + w) / 2 && Math.abs(p.y - y) < 12);
       for (const l of labelSpots(city.data, car.x, car.z, MAP_M / 2)) {
-        if (mg.measureText(l.text).width > l.len * SCALE) continue; // label longer than its road: skip
+        const w = mg.measureText(l.text).width;
+        if (w > l.len * SCALE) continue; // label longer than its road: skip
+        const x = MAP_PX / 2 + (l.x - car.x) * SCALE;
+        const y = MAP_PX / 2 + (l.z - car.z) * SCALE;
+        placed.push({ x, y, w });
         mg.save();
-        mg.translate(MAP_PX / 2 + (l.x - car.x) * SCALE, MAP_PX / 2 + (l.z - car.z) * SCALE);
+        mg.translate(x, y);
         mg.rotate(l.angle);
         mg.strokeText(l.text, 0, 0);
         mg.fillText(l.text, 0, 0);
         mg.restore();
+      }
+      mg.font = '9px system-ui, sans-serif';
+      mg.fillStyle = '#ffe9a8';
+      for (const b of buildingSpots(buildings, car.x, car.z, MAP_M / 2)) {
+        const w = mg.measureText(b.text).width;
+        const x = MAP_PX / 2 + (b.x - car.x) * SCALE;
+        const y = MAP_PX / 2 + (b.z - car.z) * SCALE;
+        if (!free(x, y, w)) continue; // ponytail: greedy largest-first placement; no repositioning
+        placed.push({ x, y, w });
+        mg.strokeText(b.text, x, y);
+        mg.fillText(b.text, x, y);
       }
       mg.save();
       mg.translate(MAP_PX / 2, MAP_PX / 2);
