@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadModel } from '../assets';
 import type { CarInput, CarState } from './carPhysics';
+import { paintWhite } from './livery';
 
 const WHEEL_RADIUS = 0.3;
 
@@ -29,6 +30,7 @@ function mbgDecal(): THREE.Mesh {
 
 export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
   const group = await loadModel('delivery');
+  paintWhite(group);
   scene.add(group);
 
   // decals on both sides of the cargo box (body is 1.5 wide; box sits roughly y 1..2.5, z -1.6..0.4)
