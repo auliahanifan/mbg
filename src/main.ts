@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { createScene } from './render/scene';
 import { buildCity } from './world/cityBuilder';
-import { tileCenter } from './world/cityMap';
+import { MAP, tileCenter, collisionBoxes } from './world/cityMap';
 import { stepCar, type CarState } from './vehicle/carPhysics';
+import { resolveCar } from './vehicle/collision';
 import { createPlayerCar } from './vehicle/playerCar';
 import { readCarInput } from './input';
 
@@ -10,6 +11,7 @@ const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = createScene(canvas);
 const { pois } = await buildCity(ctx.scene);
 const player = await createPlayerCar(ctx.scene);
+const boxes = collisionBoxes(MAP);
 document.getElementById('loading')!.remove();
 console.log('POIs', pois);
 
@@ -21,6 +23,7 @@ ctx.renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   const input = readCarInput();
   car = stepCar(car, input, dt);
+  car = resolveCar(car, boxes, []);
   player.sync(car, input, dt);
 
   ctx.camera.position.set(car.x - Math.sin(car.heading) * 10, 5, car.z - Math.cos(car.heading) * 10);
