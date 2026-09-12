@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { loadModel } from '../assets';
 import type { CarInput, CarState } from './carPhysics';
-import { paintWhite } from './livery';
+import { buildVehicle, vehicleSpec, type CarSpec } from './vehicles';
 import { FLAT, grade, type Ground } from '../world/terrain';
 
-const WHEEL_RADIUS = 0.3;
+const MBG = vehicleSpec('mbg') as CarSpec; // Daihatsu Gran Max box — what SPPG kitchens actually deliver in
+const WHEEL_RADIUS = MBG.wheelR;
 
 export interface PlayerCar {
   group: THREE.Group;
@@ -47,22 +47,21 @@ function decal(mat: THREE.Material, w: number, h: number): THREE.Mesh {
 }
 
 export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
-  const group = await loadModel('delivery');
-  paintWhite(group);
+  const group = buildVehicle('mbg');
   scene.add(group);
 
   const tex = await liveryTexture();
   const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
-  // cargo box sides: x ±0.65, y 0.3..1.55, z -1.6..0.45 (measured from delivery.glb)
+  const b = MBG.box!;
   for (const side of [1, -1]) {
-    const d = decal(mat, 1.9, 1.04);
-    d.position.set(side * 0.66, 0.93, -0.57);
+    const d = decal(mat, 1.85, 1.01);
+    d.position.set(side * (b.w / 2 + 0.005), 1.45, (b.z0 + b.z1) / 2);
     d.rotation.y = side * (Math.PI / 2);
     group.add(d);
   }
   // rear door faces the chase camera all game
-  const rear = decal(mat, 1.0, 0.55);
-  rear.position.set(0, 1.05, -1.6);
+  const rear = decal(mat, 1.1, 0.6);
+  rear.position.set(0, 1.45, b.z0 - 0.005);
   rear.rotation.y = Math.PI;
   group.add(rear);
 

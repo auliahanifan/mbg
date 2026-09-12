@@ -1,8 +1,7 @@
 import { edgesFrom, pointOnEdge, type City } from '../world/city';
 import type { Circle } from '../vehicle/collision';
+import { pickVehicle, vehicleSpec } from '../vehicle/vehicles';
 
-export const TRAFFIC_RADIUS = 1.4;
-const MODELS = ['sedan', 'suv', 'taxi', 'van', 'hatchback-sports', 'truck'];
 const LOOK_AHEAD = 10;
 const LOOK_WIDTH = 2.5;
 const ACCEL = 6;
@@ -31,7 +30,9 @@ function placeCar(city: City, c: TrafficCar) {
   const heading = c.dir === 1 ? p.heading : p.heading + Math.PI;
   const fx = Math.sin(heading);
   const fz = Math.cos(heading);
-  const lane = city.edges[c.edge].w / 4; // left-hand traffic: left of forward is (fz, -fx)
+  const spec = vehicleSpec(c.model);
+  // left-hand traffic: left of forward is (fz, -fx); motorbikes hug the kerb like they do here
+  const lane = city.edges[c.edge].w / 4 + ('bike' in spec ? 0.8 : 0);
   c.x = p.x + fz * lane;
   c.z = p.z - fx * lane;
   c.heading = heading;
@@ -63,8 +64,9 @@ function respawn(city: City, c: TrafficCar, rng: () => number, near: { x: number
 
 export function spawnTraffic(city: City, count: number, rng: () => number, near: { x: number; z: number }): TrafficCar[] {
   return Array.from({ length: count }, () => {
+    const model = pickVehicle(rng);
     const c: TrafficCar = {
-      edge: 0, dir: 1, t: 0, speed: 0, cruise: 8 + 4 * rng(), model: MODELS[Math.floor(rng() * MODELS.length)],
+      edge: 0, dir: 1, t: 0, speed: 0, cruise: (8 + 4 * rng()) * vehicleSpec(model).speedK, model,
       x: 0, z: 0, heading: 0, stuck: 0,
     };
     respawn(city, c, rng, near, SPAWN_AVOID, KEEP_RADIUS);
@@ -114,4 +116,4 @@ export function stepTraffic(city: City, cars: TrafficCar[], obstacles: { x: numb
   }
 }
 
-export const trafficCircles = (cars: TrafficCar[]): Circle[] => cars.map((c) => ({ x: c.x, z: c.z, r: TRAFFIC_RADIUS }));
+export const trafficCircles = (cars: TrafficCar[]): Circle[] => cars.map((c) => ({ x: c.x, z: c.z, r: vehicleSpec(c.model).radius }));

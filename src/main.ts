@@ -43,7 +43,7 @@ const spawn = pointOnEdge(city, spawnEdge.edge, spawnEdge.t);
 const resetCar = (): CarState => ({ x: spawn.x, z: spawn.z, heading: spawn.heading, speed: 0 });
 let car = resetCar();
 const traffic = spawnTraffic(city, 30, Math.random, car);
-const trafficView = await createTrafficRenderer(ctx.scene, traffic, ground);
+const trafficView = createTrafficRenderer(ctx.scene, traffic, ground);
 let quest: Quest = createQuest(kitchen, schools, 1, routeLen);
 const hud = createHud(city, ground);
 const markers = createMarkers(ctx.scene, ground);

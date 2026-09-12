@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadCity, pointOnEdge } from '../world/city';
-import { spawnTraffic, stepTraffic, trafficCircles, TRAFFIC_RADIUS, type TrafficCar } from './traffic';
+import { spawnTraffic, stepTraffic, trafficCircles, type TrafficCar } from './traffic';
+import { vehicleSpec } from '../vehicle/vehicles';
 
 // 0 --100-- 1 --100-- 2 ; 1 --100-- 3 (south). Node 2 and 3 are dead ends.
 const city = loadCity({
@@ -10,8 +11,8 @@ const city = loadCity({
   pois: [],
 });
 const seq = (...vals: number[]) => { let i = 0; return () => vals[i++ % vals.length]; };
-const car = (edge: number, dir: 1 | -1, t: number, speed = 10): TrafficCar =>
-  ({ edge, dir, t, speed, cruise: 10, model: 'sedan', x: 0, z: 0, heading: 0, stuck: 0 });
+const car = (edge: number, dir: 1 | -1, t: number, speed = 10, model = 'avanza'): TrafficCar =>
+  ({ edge, dir, t, speed, cruise: 10, model, x: 0, z: 0, heading: 0, stuck: 0 });
 const far = { x: 50, z: 0 }; // player reference that never triggers a respawn in these tests
 
 describe('traffic', () => {
@@ -63,7 +64,13 @@ describe('traffic', () => {
     expect(c.t).toBe(0.5);
     expect(c.speed).toBe(0);
   });
-  it('exposes collision circles', () => {
-    expect(trafficCircles([car(0, 1, 0)])[0].r).toBe(TRAFFIC_RADIUS);
+  it('puts motorbikes further left, by the kerb', () => {
+    const c = car(0, 1, 0, 10, 'beat');
+    stepTraffic(city, [c], [], 1, seq(0), far);
+    expect(c.z).toBeCloseTo(-2.3); // w/4 + 0.8
+  });
+  it('exposes collision circles sized per vehicle', () => {
+    expect(trafficCircles([car(0, 1, 0)])[0].r).toBe(vehicleSpec('avanza').radius);
+    expect(trafficCircles([car(0, 1, 0, 10, 'beat')])[0].r).toBeLessThan(vehicleSpec('avanza').radius);
   });
 });

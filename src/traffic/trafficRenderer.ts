@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { loadModel } from '../assets';
+import { buildVehicle } from '../vehicle/vehicles';
 import type { TrafficCar } from './traffic';
 import { FLAT, grade, type Ground } from '../world/terrain';
 
@@ -13,17 +13,15 @@ const lerpAngle = (a: number, b: number, k: number) => {
   return a + d * k;
 };
 
-export async function createTrafficRenderer(scene: THREE.Scene, cars: TrafficCar[], ground: Ground = FLAT) {
-  const meshes = await Promise.all(
-    cars.map(async (c) => {
-      const m = await loadModel(c.model);
-      m.position.set(c.x, ground.y(c.x, c.z), c.z);
-      m.rotation.y = c.heading;
-      scene.add(m);
-      const wheels = m.children.filter((o) => o.name.startsWith('wheel'));
-      return { m, wheels };
-    }),
-  );
+export function createTrafficRenderer(scene: THREE.Scene, cars: TrafficCar[], ground: Ground = FLAT) {
+  const meshes = cars.map((c) => {
+    const m = buildVehicle(c.model);
+    m.position.set(c.x, ground.y(c.x, c.z), c.z);
+    m.rotation.y = c.heading;
+    scene.add(m);
+    const wheels = m.children.filter((o) => o.name.startsWith('wheel'));
+    return { m, wheels };
+  });
   return {
     update(dt: number) {
       const k = 1 - Math.exp(-SMOOTH * dt);
@@ -33,7 +31,7 @@ export async function createTrafficRenderer(scene: THREE.Scene, cars: TrafficCar
         if (m.position.distanceTo(target) > 20) m.position.copy(target); // respawn teleport: don't streak across the map
         m.position.lerp(target, k);
         m.rotation.set(-Math.atan(grade(ground, c.x, c.z, c.heading)), lerpAngle(m.rotation.y, c.heading, k), 0, 'YXZ');
-        for (const w of wheels) w.rotation.x += (c.speed * dt) / WHEEL_RADIUS;
+        for (const w of wheels) w.rotation.x += (c.speed * dt) / (w.position.y || WHEEL_RADIUS); // wheel sits at its own radius
       });
     },
   };
