@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CENTER, project, bbox, widthOf, area, orientedBox, classify, buildCityData, type OsmElement } from './osm';
+import { CENTER, project, bbox, widthOf, area, orientedBox, classify, propagateNames, buildCityData, type OsmElement } from './osm';
 
 describe('project', () => {
   it('maps the centre to the origin, north to -z, east to +x', () => {
@@ -94,7 +94,7 @@ describe('buildCityData', () => {
     { type: 'node', id: 4, lat: lat - d, lon: lon - d },
     { type: 'way', id: 10, nodes: [1, 2], tags: { highway: 'residential', name: 'Jalan A' } },
     { type: 'way', id: 11, nodes: [2, 3], tags: { highway: 'footway' } },
-    { type: 'way', id: 12, nodes: [3, 2], tags: { highway: 'service' } },
+    { type: 'way', id: 12, nodes: [3, 2], tags: { highway: 'service', alt_name: 'Gang B' } },
     { type: 'way', id: 20, nodes: [1, 2, 4, 1], tags: { building: 'yes' } },
     { type: 'way', id: 21, nodes: [1, 2], tags: { building: 'yes' } }, // not closed → skipped
   ];
@@ -102,7 +102,7 @@ describe('buildCityData', () => {
   it('keeps only drivable ways, sharing node indices', () => {
     expect(data.ways).toHaveLength(2);
     expect(data.ways[0]).toEqual({ n: [0, 1], w: 6, name: 'Jalan A' });
-    expect(data.ways[1]).toEqual({ n: [2, 1], w: 4 });
+    expect(data.ways[1]).toEqual({ n: [2, 1], w: 4, name: 'Gang B' });
     expect(data.nodes).toHaveLength(3);
     expect(data.nodes[0]).toEqual([0, 0]);
     expect(data.nodes[1][0]).toBeCloseTo(110.4, 0);
@@ -118,5 +118,25 @@ describe('buildCityData', () => {
     const k = data.pois[0];
     expect(k.kind).toBe('kitchen');
     expect(k.z).toBeLessThan(-1000); // Polresta is north of centre
+  });
+});
+
+describe('propagateNames', () => {
+  const nodes: [number, number][] = [[0, 0], [100, 0], [200, 5], [100, 100], [300, 0]];
+  const mk = () => [
+    { n: [0, 1], w: 6, name: 'Jalan A' },
+    { n: [1, 2], w: 6 }, // continues A almost straight (≈3°)
+    { n: [1, 3], w: 6 }, // perpendicular side street
+    { n: [4, 2], w: 6 }, // continues the (now named) way 1, reversed direction
+  ];
+  it('names straight continuations transitively, never side streets', () => {
+    const ways = mk();
+    propagateNames(nodes, ways);
+    expect(ways.map((w) => w.name)).toEqual(['Jalan A', 'Jalan A', undefined, 'Jalan A']);
+  });
+  it('picks the straightest named neighbour at a junction', () => {
+    const ways = [{ n: [0, 1], w: 6, name: 'Jalan A' }, { n: [3, 1], w: 6, name: 'Jalan B' }, { n: [1, 2], w: 6 }];
+    propagateNames(nodes, ways);
+    expect(ways[2].name).toBe('Jalan A');
   });
 });

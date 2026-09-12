@@ -132,6 +132,41 @@ export function classify(tags: Record<string, string>, ring: [number, number][])
   return { h: round1(explicit || floors * FLOOR) };
 }
 
+/** Unnamed ways inherit the name of a named way they continue nearly straight (≤ 30°) at a shared end node; repeated so chains fill in. */
+export function propagateNames(nodes: [number, number][], ways: CityData['ways']): void {
+  const touching = new Map<number, number[]>();
+  ways.forEach((w, i) => {
+    for (const n of [w.n[0], w.n[w.n.length - 1]]) touching.set(n, [...(touching.get(n) ?? []), i]);
+  });
+  const outDir = (w: CityData['ways'][number], node: number): [number, number] => {
+    const [a, b] = w.n[0] === node ? [w.n[0], w.n[1]] : [w.n[w.n.length - 1], w.n[w.n.length - 2]];
+    const dx = nodes[b][0] - nodes[a][0];
+    const dz = nodes[b][1] - nodes[a][1];
+    const l = Math.hypot(dx, dz) || 1;
+    return [dx / l, dz / l];
+  };
+  const MAX_DOT = -Math.cos((30 * Math.PI) / 180); // outgoing directions of a straight continuation point opposite ways
+  for (let changed = true, pass = 0; changed && pass < 10; pass++) {
+    changed = false;
+    for (const w of ways) {
+      if (w.name || w.n.length < 2) continue;
+      for (const node of [w.n[0], w.n[w.n.length - 1]]) {
+        const [ox, oz] = outDir(w, node);
+        let best: string | undefined;
+        let bestDot = MAX_DOT;
+        for (const j of touching.get(node)!) {
+          const o = ways[j];
+          if (o === w || !o.name || o.n.length < 2) continue;
+          const [px, pz] = outDir(o, node);
+          const dot = ox * px + oz * pz;
+          if (dot < bestDot) { bestDot = dot; best = o.name; }
+        }
+        if (best) { w.name = best; changed = true; break; }
+      }
+    }
+  }
+}
+
 export function buildCityData(elements: OsmElement[]): CityData {
   const latLon = new Map<number, [number, number]>();
   for (const e of elements) if (e.type === 'node') latLon.set(e.id, [e.lat, e.lon]);
@@ -155,7 +190,8 @@ export function buildCityData(elements: OsmElement[]): CityData {
       const w = widthOf(e.tags.highway);
       if (w === null || e.nodes.length < 2) continue;
       const way: CityData['ways'][number] = { n: e.nodes.map(nodeIndex), w };
-      if (e.tags.name) way.name = e.tags.name;
+      const name = e.tags.name ?? e.tags.alt_name ?? e.tags.official_name;
+      if (name) way.name = name;
       ways.push(way);
     } else if (e.tags.building) {
       const closed = e.nodes.length >= 4 && e.nodes[0] === e.nodes[e.nodes.length - 1];
@@ -164,6 +200,7 @@ export function buildCityData(elements: OsmElement[]): CityData {
       buildings.push({ p, ...classify(e.tags, p) });
     }
   }
+  propagateNames(nodes, ways);
   const pois = POIS.map(({ lat, lon, ...rest }) => {
     const [x, z] = project(lat, lon);
     return { ...rest, x, z };

@@ -15,4 +15,4 @@ if (!res.ok) throw new Error(`Overpass ${res.status} ${res.statusText}`);
 const { elements } = await res.json();
 const data = buildCityData(elements);
 writeFileSync('public/purwokerto.json', JSON.stringify(data));
-console.log(`nodes ${data.nodes.length}, ways ${data.ways.length}, buildings ${data.buildings.length}, pois ${data.pois.length}`);
+console.log(`nodes ${data.nodes.length}, ways ${data.ways.length} (named ${data.ways.filter((w) => w.name).length}), buildings ${data.buildings.length}, pois ${data.pois.length}`);
