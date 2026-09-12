@@ -46,7 +46,7 @@ export function createPost(ctx: SceneCtx) {
   gtao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1, thickness: 1, scale: 1.4, samples: 8, distanceFallOff: 1, screenSpaceRadius: false });
   gtao.blendIntensity = 0.75;
   composer.addPass(gtao);
-  composer.addPass(new UnrealBloomPass(size, 0.3, 0.7, 3.0)); // threshold above scene.ts's sky cap (2.2): facing the sun used to bloom the whole sky over the road
+  composer.addPass(new UnrealBloomPass(size, 0.25, 1.2, 1.0)); // threshold above clear-sky level: the sun glows, the sky itself no longer bleeds over the road
   const grade = new ShaderPass(GradeShader);
   composer.addPass(grade);
   composer.addPass(new OutputPass());
