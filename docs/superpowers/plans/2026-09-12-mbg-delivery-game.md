@@ -271,6 +271,9 @@ git commit -m "feat: scaffold vite+three project with sky, sun and shadows"
 
 ### Task 2: Kenney assets + GLTF loader
 
+> **Amendment (2026-09-12, during execution):** the Kenney GLBs reference an external `Textures/colormap.png` (one per pack), so the flat `public/models/` layout renders everything white. Actual layout is `public/models/<pack>/{*.glb,Textures/colormap.png}` with pack ∈ `roads|commercial|suburban|cars`; `src/assets.ts` derives the pack from the model-name prefix (`packOf(name)`, tested in `src/assets.test.ts`) and `loadModel(name)` keeps its interface. The steps below show the original flat layout.
+
+
 **Files:**
 - Create: `scripts/fetch-assets.sh`, `public/models/*.glb` (generated), `public/models/LICENSE-kenney.txt`, `src/assets.ts`
 - Modify: `src/main.ts` (temporary visual check)

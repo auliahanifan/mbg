@@ -18,7 +18,9 @@ EOF
 
 copy() { # copy <pack> <names...>
   local pack=$1; shift
-  for n in "$@"; do cp "$tmp/$pack/Models/GLB format/$n.glb" public/models/; done
+  mkdir -p "public/models/$pack/Textures"
+  cp "$tmp/$pack/Models/GLB format/Textures/colormap.png" "public/models/$pack/Textures/"
+  for n in "$@"; do cp "$tmp/$pack/Models/GLB format/$n.glb" "public/models/$pack/"; done
 }
 copy roads road-straight road-crossing road-bend road-intersection road-crossroad road-end tile-low light-curved
 copy commercial building-a building-b building-c building-d building-e building-f building-g building-h \
@@ -28,4 +30,4 @@ copy suburban building-type-a building-type-b building-type-c building-type-d bu
 copy cars delivery sedan suv taxi van hatchback-sports truck
 cp "$tmp/cars/License.txt" public/models/LICENSE-kenney.txt
 rm -rf "$tmp"
-ls public/models | wc -l
+find public/models -type f | wc -l
