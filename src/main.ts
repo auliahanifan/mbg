@@ -5,8 +5,10 @@ import { MAP, tileCenter, collisionBoxes } from './world/cityMap';
 import { stepCar, type CarState } from './vehicle/carPhysics';
 import { resolveCar } from './vehicle/collision';
 import { createPlayerCar } from './vehicle/playerCar';
-import { readCarInput } from './input';
+import { readCarInput, consumeKey } from './input';
 import { createChaseCamera } from './camera/chaseCamera';
+import { createQuest, stepQuest, type Quest } from './quest/quest';
+import { createHud } from './ui/hud';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = createScene(canvas);
@@ -15,10 +17,14 @@ const player = await createPlayerCar(ctx.scene);
 const chase = createChaseCamera(ctx);
 const boxes = collisionBoxes(MAP);
 document.getElementById('loading')!.remove();
-console.log('POIs', pois);
 
 const start = tileCenter(2, 5);
-let car: CarState = { x: start.x, z: start.z, heading: Math.PI / 2, speed: 0 }; // facing east along the top road
+const kitchen = pois.find((p) => p.kind === 'kitchen')!;
+const schools = pois.filter((p) => p.kind === 'school');
+let quest: Quest = createQuest(kitchen, schools);
+const hud = createHud();
+const resetCar = () => ({ x: start.x, z: start.z, heading: Math.PI / 2, speed: 0 });
+let car: CarState = resetCar(); // facing east along the top road
 
 const clock = new THREE.Clock();
 ctx.renderer.setAnimationLoop(() => {
@@ -27,6 +33,12 @@ ctx.renderer.setAnimationLoop(() => {
   car = stepCar(car, input, dt);
   car = resolveCar(car, boxes, []);
   player.sync(car, input, dt);
+  quest = stepQuest(quest, car, dt);
+  if (consumeKey('KeyR') && (quest.phase === 'done' || quest.phase === 'failed')) {
+    quest = createQuest(kitchen, schools, quest.phase === 'done' ? quest.round + 1 : 1);
+    car = resetCar();
+  }
+  hud.update(quest, car);
 
   chase.update(car, dt);
   ctx.renderer.render(ctx.scene, ctx.camera);
