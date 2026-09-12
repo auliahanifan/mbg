@@ -1,5 +1,6 @@
-import type { Box } from '../world/cityMap';
 import type { CarState } from './carPhysics';
+
+export interface Box { minX: number; maxX: number; minZ: number; maxZ: number }
 
 export interface Circle { x: number; z: number; r: number }
 export const CAR_RADIUS = 0.9;
@@ -55,7 +56,7 @@ export function resolveCar(s: CarState, boxes: Box[], circles: Circle[]): CarSta
     };
     for (const b of boxes) {
       // ponytail: linear scan over all boxes (~200); grid lookup if it ever shows in a profile
-      if (Math.abs((b.minX + b.maxX) / 2 - c.x) > 10 || Math.abs((b.minZ + b.maxZ) / 2 - c.z) > 10) continue;
+      if (Math.abs((b.minX + b.maxX) / 2 - c.x) > 30 || Math.abs((b.minZ + b.maxZ) / 2 - c.z) > 30) continue;
       apply(pushOutOfBox(c, b));
     }
     for (const o of circles) apply(pushOutOfCircle(c, o));
