@@ -1,6 +1,6 @@
 # Kurir MBG
 
-Game 3D browser bergaya GTA: kemudikan truk MBG (Makan Bergizi Gratis), ambil paket di Dapur SPPG, antar ke 3 SD sebelum waktu habis.
+Game 3D browser bergaya GTA di kota Purwokerto: kemudikan mobil boks putih SPPG (Makan Bergizi Gratis) berlogo BGN, ambil paket di SPPG Polresta Banyumas, antar ke 3 SD sebelum waktu habis.
 
 ## Jalankan
 

@@ -36,3 +36,10 @@ Kota low-poly terang ala siang hari: sun directional shadow yang mengikuti truk,
 ## Non-goals v1
 
 Pejalan kaki, polisi/wanted, siang-malam, suara, mobile touch controls, orbit kamera mouse.
+
+## Amandemen 2026-09-12 — Purwokerto & livery BGN
+
+- Kota = **Purwokerto**. POI nyata: dapur `SPPG Polresta Banyumas`; SD `SDN 1 Bancarkembar`, `SDN 1 Sokanegara`, `SDN 1 Kranji`.
+- Tile landmark baru (scenery, bukan quest stop): `A` Alun-alun Purwokerto (pusat taman), `M` Menara Teratai (mesh prosedural ±30 unit), `S` Stasiun Purwokerto, `G` GOR Satria, `U` Kampus Unsoed — semua berlabel. Ring `X` kini gedung rendah (Purwokerto tanpa pencakar langit). Gunung Slamet = cone tanpa fog di utara (−z), camera far 1500.
+- Mobil pemain: `delivery.glb` **putih** (UV body/door dipindah ke sel putih colormap Kenney), stiker livery di kedua sisi boks + pintu belakang: lambang BGN resmi (`public/logo-bgn.png`, warna resmi #071e49 / #92d05d), teks "MAKAN BERGIZI GRATIS", "SPPG POLRESTA BANYUMAS", strip hijau-biru.
+- Teks quest "Ambil paket MBG di {nama dapur}".
