@@ -10,6 +10,8 @@ import { createChaseCamera } from './camera/chaseCamera';
 import { createQuest, stepQuest, questTarget, type Quest } from './quest/quest';
 import { createHud } from './ui/hud';
 import { createMarkers } from './quest/markers';
+import { spawnTraffic, stepTraffic, trafficCircles } from './traffic/traffic';
+import { createTrafficRenderer } from './traffic/trafficRenderer';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = createScene(canvas);
@@ -27,13 +29,17 @@ const hud = createHud();
 const markers = createMarkers(ctx.scene);
 const resetCar = () => ({ x: start.x, z: start.z, heading: Math.PI / 2, speed: 0 });
 let car: CarState = resetCar(); // facing east along the top road
+const traffic = spawnTraffic(MAP, 16, Math.random, { x: start.x, z: start.z, radius: 12 });
+const trafficView = await createTrafficRenderer(ctx.scene, traffic);
 
 const clock = new THREE.Clock();
 ctx.renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   const input = readCarInput();
   car = stepCar(car, input, dt);
-  car = resolveCar(car, boxes, []);
+  stepTraffic(traffic, [car], dt, Math.random, MAP);
+  car = resolveCar(car, boxes, trafficCircles(traffic));
+  trafficView.update(dt);
   player.sync(car, input, dt);
   quest = stepQuest(quest, car, dt);
   if (consumeKey('KeyR') && (quest.phase === 'done' || quest.phase === 'failed')) {
