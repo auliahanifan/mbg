@@ -2,21 +2,30 @@ import * as THREE from 'three';
 import { createScene } from './render/scene';
 import { buildCity } from './world/cityBuilder';
 import { tileCenter } from './world/cityMap';
+import { stepCar, type CarState } from './vehicle/carPhysics';
+import { createPlayerCar } from './vehicle/playerCar';
+import { readCarInput } from './input';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = createScene(canvas);
 const { pois } = await buildCity(ctx.scene);
+const player = await createPlayerCar(ctx.scene);
 document.getElementById('loading')!.remove();
 console.log('POIs', pois);
 
-// temporary orbit-ish overview until the player car exists (Task 5)
-const center = tileCenter(8, 8);
-let t = 0;
+const start = tileCenter(2, 5);
+let car: CarState = { x: start.x, z: start.z, heading: Math.PI / 2, speed: 0 }; // facing east along the top road
+
+const clock = new THREE.Clock();
 ctx.renderer.setAnimationLoop(() => {
-  t += 0.003;
-  ctx.camera.position.set(center.x + Math.sin(t) * 90, 45, center.z + Math.cos(t) * 90);
-  ctx.camera.lookAt(center.x, 0, center.z);
-  ctx.sun.position.set(center.x, 0, center.z).add(new THREE.Vector3().copy(ctx.sunDir).multiplyScalar(80));
-  ctx.sun.target.position.set(center.x, 0, center.z);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const input = readCarInput();
+  car = stepCar(car, input, dt);
+  player.sync(car, input, dt);
+
+  ctx.camera.position.set(car.x - Math.sin(car.heading) * 10, 5, car.z - Math.cos(car.heading) * 10);
+  ctx.camera.lookAt(car.x, 1.5, car.z);
+  ctx.sun.position.set(car.x, 0, car.z).add(new THREE.Vector3().copy(ctx.sunDir).multiplyScalar(80));
+  ctx.sun.target.position.set(car.x, 0, car.z);
   ctx.renderer.render(ctx.scene, ctx.camera);
 });
