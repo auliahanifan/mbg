@@ -31,7 +31,7 @@ export function questTarget(q: Quest): Poi | null {
 
 export function questText(q: Quest): string {
   switch (q.phase) {
-    case 'toKitchen': return 'Ambil paket MBG di Dapur SPPG';
+    case 'toKitchen': return `Ambil paket MBG di ${q.kitchen.name}`;
     case 'delivering': return `Antar ke ${q.schools[q.next].name} (${q.next + 1}/${q.schools.length})`;
     case 'done': return 'Misi selesai! Semua anak sudah makan 🍱 — tekan R untuk ronde berikutnya';
     case 'failed': return 'Waktu habis! Tekan R untuk mengulang';

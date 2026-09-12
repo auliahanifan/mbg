@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MAP, TILE, BLOCK_HALF, rotateDir, opposite, leftOf, headingOf, tileAt, isRoad, tileCenter, worldToTile,
-  roadSides, pickRoadModel, collisionBoxes, findPois, roadTiles,
+  roadSides, pickRoadModel, collisionBoxes, findPois, roadTiles, LANDMARKS,
 } from './cityMap';
 
 const small = [
@@ -89,11 +89,20 @@ describe('findPois', () => {
     expect(pois.map((p) => p.id)).toEqual(['K', '1', '2', '3']);
     const k = pois[0];
     expect(k.kind).toBe('kitchen');
-    expect(k.name).toBe('Dapur SPPG');
-    expect(k).toMatchObject({ row: 3, col: 3, stop: { row: 2, col: 3, x: 36, z: 24 } });
+    expect(k.name).toBe('SPPG Polresta Banyumas');
+    expect(k).toMatchObject({ row: 3, col: 4, stop: { row: 2, col: 4, x: 48, z: 24 } });
+    expect(pois.slice(1).map((p) => p.name)).toEqual(['SDN 1 Bancarkembar', 'SDN 1 Sokanegara', 'SDN 1 Kranji']);
     for (const p of pois) expect(isRoad(MAP, p.stop.row, p.stop.col)).toBe(true);
   });
   it('throws when a POI has no adjacent road', () => {
     expect(() => findPois(['XXX', 'XKX', 'XXX'])).toThrow();
+  });
+});
+
+describe('LANDMARKS', () => {
+  it('every landmark char appears exactly once in MAP and every MAP char is known', () => {
+    const chars = MAP.join('');
+    for (const ch of Object.keys(LANDMARKS)) expect(chars.split(ch).length - 1).toBe(1);
+    for (const ch of new Set(chars)) expect('RX.HTK123'.includes(ch) || ch in LANDMARKS).toBe(true);
   });
 });

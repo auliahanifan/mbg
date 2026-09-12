@@ -22,26 +22,36 @@ export const leftOf = (d: Dir): Dir => rotateDir(d, 1);
 /** Heading such that forward = (sin h, cos h) points along d. */
 export const headingOf = (d: Dir): number => Math.atan2(DIR_VEC[d].dx, DIR_VEC[d].dz);
 
-// R road, . commercial, X skyscraper ring, H house, T park, K SPPG kitchen, 1-3 schools
+// R road, . ruko/commercial, X low-rise ring (solid), H house, T park, K SPPG kitchen, 1-3 schools,
+// landmarks: A Alun-alun, M Menara Teratai, S Stasiun, G GOR Satria, U Unsoed. North (Gunung Slamet) is -z / row 0.
 export const MAP: string[] = [
   'XXXXXXXXXXXXXXXXX',
   'X...............X',
   'X.RRRRRRRRRRRRR.X',
-  'X.RK..R.1.RHHHR.X',
-  'X.R...R...RHHHR.X',
-  'X.R...R...RHHHR.X',
+  'X.R.K.R.1.R.U.R.X',
+  'X.R...RM..R...R.X',
+  'X.R...R...R.G.R.X',
   'X.RRRRRRRRRRRRR.X',
   'X.R...RTTTR...R.X',
-  'X.R...RTTTR..2R.X',
+  'X.RS..RTATR..2R.X',
   'X.R...RTTTR...R.X',
   'X.RRRRRRRRRRRRR.X',
   'X.RHHHR...RHHHR.X',
   'X.RHHHR...RHHHR.X',
-  'X.RHHHR.3.RHHHR.X',
+  'X.RHHHR...RH3HR.X',
   'X.RRRRRRRRRRRRR.X',
   'X...............X',
   'XXXXXXXXXXXXXXXXX',
 ];
+
+/** Named places that are scenery only (no quest stop). `model` = Kenney commercial building; none = custom/empty tile. */
+export const LANDMARKS: Record<string, { name: string; model?: string }> = {
+  A: { name: 'Alun-alun Purwokerto' },
+  M: { name: 'Menara Teratai' },
+  S: { name: 'Stasiun Purwokerto', model: 'building-e' },
+  G: { name: 'GOR Satria', model: 'building-i' },
+  U: { name: 'Kampus Unsoed', model: 'building-m' },
+};
 
 export const tileAt = (map: string[], row: number, col: number): string => map[row]?.[col] ?? 'X';
 export const isRoad = (map: string[], row: number, col: number): boolean => tileAt(map, row, col) === 'R';
@@ -102,10 +112,10 @@ export interface Poi {
 }
 
 const POI_INFO: Record<string, { kind: Poi['kind']; name: string }> = {
-  K: { kind: 'kitchen', name: 'Dapur SPPG' },
-  '1': { kind: 'school', name: 'SDN 1 Merdeka' },
-  '2': { kind: 'school', name: 'SDN 2 Harapan' },
-  '3': { kind: 'school', name: 'SDN 3 Nusantara' },
+  K: { kind: 'kitchen', name: 'SPPG Polresta Banyumas' },
+  '1': { kind: 'school', name: 'SDN 1 Bancarkembar' },
+  '2': { kind: 'school', name: 'SDN 1 Sokanegara' },
+  '3': { kind: 'school', name: 'SDN 1 Kranji' },
 };
 
 export function findPois(map: string[]): Poi[] {
