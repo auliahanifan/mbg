@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { daylight } from './daylight';
 
 export interface SceneCtx {
   renderer: THREE.WebGLRenderer;
@@ -7,8 +8,10 @@ export interface SceneCtx {
   camera: THREE.PerspectiveCamera;
   sun: THREE.DirectionalLight;
   sunDir: THREE.Vector3;
+  setTime: (hour: number) => void;
 }
 
+export const START_HOUR = 7; // the clock starts here and runs from there
 const HAZE = 0xb9c4cf; // horizon haze; fog colour, matches the sky at the horizon under tone mapping
 
 export function createScene(canvas: HTMLCanvasElement): SceneCtx {
@@ -27,8 +30,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 5000);
   camera.position.set(0, 6, -12);
 
-  // late-afternoon sun: low (~24°) so shadows stretch across the road and facades catch raking light
-  const sunDir = new THREE.Vector3(0.62, 0.42, 0.35).normalize();
+  const sunDir = new THREE.Vector3(...daylight(START_HOUR).dir);
   const sky = new Sky();
   sky.scale.setScalar(20000);
   const u = sky.material.uniforms;
@@ -42,7 +44,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   u.cloudElevation.value = 0.35;
   sky.onBeforeRender = () => { u.time.value = performance.now() / 1000; }; // clouds drift
   // the sun disc is ~1e5 linear: dim the sky to sit under the tone-mapper's shoulder and clamp so the half-float post chain never sees inf (which the bloom blur turns into a NaN blob)
-  sky.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( min( texColor * 0.45, vec3( 30.0 ) ), 1.0 );'); };
+  sky.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( min( texColor * 0.45, vec3( 8.0 ) ), 1.0 );'); };
   scene.add(sky);
 
   // sky-coloured env map (LDR equirect gradient: zenith blue → horizon haze → ground) lights the world and gives car paint its reflections
@@ -64,7 +66,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   pmrem.dispose();
   equirect.dispose();
 
-  scene.add(new THREE.HemisphereLight(0x9fb6d6, 0x5a5340, 0.45));
+  const hemi = new THREE.HemisphereLight(0x9fb6d6, 0x5a5340, 0.45);
+  scene.add(hemi);
 
   const sun = new THREE.DirectionalLight(0xffd9a8, 3.2);
   sun.position.copy(sunDir).multiplyScalar(80);
@@ -82,11 +85,26 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   sun.shadow.radius = 2;
   scene.add(sun, sun.target);
 
+  // the whole sky/light rig follows the clock; the chase camera keeps the shadow box on the car
+  const setTime = (hour: number) => {
+    const d = daylight(hour);
+    sunDir.set(...d.dir);
+    u.sunPosition.value.copy(sunDir);
+    sun.intensity = d.intensity;
+    sun.color.setHex(d.color);
+    hemi.intensity = d.ambient;
+    scene.environmentIntensity = d.env;
+    (scene.fog as THREE.FogExp2).color.setHex(d.haze);
+    renderer.setClearColor(d.haze);
+    renderer.toneMappingExposure = d.exposure;
+  };
+  setTime(START_HOUR);
+
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
 
-  return { renderer, scene, camera, sun, sunDir };
+  return { renderer, scene, camera, sun, sunDir, setTime };
 }

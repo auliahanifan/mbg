@@ -10,7 +10,7 @@ const SUN_DISTANCE = 80;
 export function createChaseCamera(ctx: SceneCtx, ground: Ground = FLAT) {
   const pos = new THREE.Vector3();
   const look = new THREE.Vector3();
-  const sunOffset = ctx.sunDir.clone().multiplyScalar(SUN_DISTANCE);
+  const sunOffset = new THREE.Vector3();
   let first = true;
   return {
     reset() {
@@ -30,7 +30,7 @@ export function createChaseCamera(ctx: SceneCtx, ground: Ground = FLAT) {
       }
       ctx.camera.lookAt(look);
       ctx.sun.target.position.set(car.x, groundY, car.z);
-      ctx.sun.position.copy(ctx.sun.target.position).add(sunOffset);
+      ctx.sun.position.copy(ctx.sun.target.position).add(sunOffset.copy(ctx.sunDir).multiplyScalar(SUN_DISTANCE)); // sunDir moves with the clock
     },
   };
 }

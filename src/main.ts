@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createScene } from './render/scene';
+import { createScene, START_HOUR } from './render/scene';
 import { createPost } from './render/post';
 import { buildRoads } from './render/roads';
 import { buildBuildings } from './render/buildings';
@@ -50,9 +50,14 @@ const markers = createMarkers(ctx.scene, ground);
 const sound = createSound();
 document.getElementById('loading')!.remove();
 
+const HOURS_PER_SECOND = 0.05; // a full day in 8 real minutes
+let hour = START_HOUR;
+
 const clock = new THREE.Clock();
 ctx.renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
+  hour += dt * HOURS_PER_SECOND;
+  ctx.setTime(hour);
   const input = readCarInput();
   car = stepCar(car, input, dt, GRAVITY * grade(ground, car.x, car.z, car.heading));
   stepTraffic(city, traffic, [car], dt, Math.random, car);
@@ -68,7 +73,7 @@ ctx.renderer.setAnimationLoop(() => {
     chase.reset();
   }
   markers.update(questTarget(quest), car, clock.elapsedTime);
-  hud.update(quest, car);
+  hud.update(quest, car, hour);
   sound.update(car, input, quest, isDown('KeyH'), traffic, ctx.camera);
   chase.update(car, dt);
   post.render();

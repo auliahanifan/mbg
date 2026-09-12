@@ -4,6 +4,7 @@ import { nearestEdge, type City } from '../world/city';
 import { routeField, pathFrom, type RouteField } from '../world/routing';
 import { labelSpots, buildingSpots } from './mapLabels';
 import { FLAT, type Ground } from '../world/terrain';
+import { clockText } from '../render/daylight';
 
 const KMH_PER_UNIT = 3.6; // 1 unit = 1 m
 const MAP_PX = 200;
@@ -23,17 +24,20 @@ export function createHud(city: City, ground: Ground = FLAT) {
       #help { bottom: 16px; right: 16px; font-size: 13px; opacity: .8; }
       #street { bottom: 16px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 600; white-space: nowrap; }
       #map { position: absolute; top: 16px; right: 16px; border-radius: 12px; background: rgba(8,12,24,.55); }
+      #clock { top: ${MAP_PX + 26}px; right: 16px; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
     </style>
     <div id="q" class="box"></div>
     <div id="speed" class="box"></div>
     <div id="toast" class="box"></div>
     <div id="help" class="box">WASD / panah · Spasi rem · H klakson · M bisu · R ulang</div>
     <div id="street" class="box" hidden></div>
+    <div id="clock" class="box"></div>
     <canvas id="map" width="${MAP_PX}" height="${MAP_PX}"></canvas>`;
   const q = root.querySelector<HTMLElement>('#q')!;
   const speed = root.querySelector<HTMLElement>('#speed')!;
   const toast = root.querySelector<HTMLElement>('#toast')!;
   const street = root.querySelector<HTMLElement>('#street')!;
+  const clock = root.querySelector<HTMLElement>('#clock')!;
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   const mg = root.querySelector<HTMLCanvasElement>('#map')!.getContext('2d')!;
   const SCALE = MAP_PX / MAP_M;
@@ -42,7 +46,8 @@ export function createHud(city: City, ground: Ground = FLAT) {
   let field: RouteField | null = null;
 
   return {
-    update(quest: Quest, car: CarState) {
+    update(quest: Quest, car: CarState, hour: number) {
+      clock.textContent = clockText(hour);
       const timer = quest.phase === 'delivering' ? ` · ⏱ ${fmt(quest.timeLeft)}` : '';
       q.innerHTML = `${questText(quest)}<small>Ronde ${quest.round} · Skor ${quest.score}${timer}</small>`;
       speed.innerHTML = `${Math.round(Math.abs(car.speed) * KMH_PER_UNIT)}<span>km/j</span><small>${Math.round(ground.mdpl(car.x, car.z))} mdpl</small>`;
