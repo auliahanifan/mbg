@@ -122,13 +122,47 @@ export function buildRoads(city: City, ground: Ground = FLAT): THREE.Group {
     sidewalk.push(disc(x, z, r + SIDEWALK_EXTRA / 2, Yg.sidewalk));
     asphalt.push(disc(x, z, r, Yg.asphalt));
   }
-  const mat = (color: number, offset: number) =>
-    new THREE.MeshStandardMaterial({ color, roughness: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -offset, polygonOffsetUnits: -offset });
+  const mat = (color: number, offset: number, map?: THREE.Texture) =>
+    new THREE.MeshStandardMaterial({ color, map, roughnessMap: map, roughness: 1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -offset, polygonOffsetUnits: -offset });
   const group = new THREE.Group();
-  for (const [parts, color, offset] of [[sidewalk, 0xb9bcc4, 1], [asphalt, 0x4a4d55, 2], [marking, 0xf1f1e8, 3]] as const) {
-    const m = new THREE.Mesh(merge(parts), mat(color, offset));
+  const grime = grimeTexture();
+  for (const [parts, color, offset, map] of [[sidewalk, 0xb8b5ae, 1, grime], [asphalt, 0x8a8e96, 2, grime], [marking, 0xe4e2d4, 3, undefined]] as const) {
+    const m = new THREE.Mesh(worldUv(merge(parts), 7), mat(color, offset, map));
     m.receiveShadow = true;
     group.add(m);
   }
   return group;
+}
+
+/** Planar world-space UVs (1 repeat per `metres`) so a tiling texture reads the same on every ribbon. */
+export function worldUv(geo: THREE.BufferGeometry, metres: number): THREE.BufferGeometry {
+  const p = geo.attributes.position;
+  const uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) { uv[2 * i] = p.getX(i) / metres; uv[2 * i + 1] = p.getZ(i) / metres; }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return geo;
+}
+
+/** Tiling asphalt grime: mid grey with speckle, dark oil patches and pale wear streaks. Doubles as roughness map (dark = wetter). */
+export function grimeTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#d4d4d4'; // sRGB → ~0.66 linear; the material colour carries the actual albedo
+  g.fillRect(0, 0, 256, 256);
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
+  for (let i = 0; i < 9000; i++) { g.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.07)'; g.fillRect(rnd() * 256, rnd() * 256, 1, 1); }
+  for (let i = 0; i < 14; i++) {
+    const r = 10 + rnd() * 30;
+    const grad = g.createRadialGradient(0, 0, 0, 0, 0, r);
+    grad.addColorStop(0, `rgba(${rnd() < 0.6 ? '20,20,24' : '240,240,230'},0.09)`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.save(); g.translate(rnd() * 256, rnd() * 256); g.scale(1, 0.4 + rnd()); g.fillStyle = grad; g.fillRect(-r, -r, 2 * r, 2 * r); g.restore();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
 }

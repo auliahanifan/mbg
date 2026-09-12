@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { loadModel } from '../assets';
 import type { CarInput, CarState } from './carPhysics';
 import { paintWhite } from './livery';
-import { FLAT, type Ground } from '../world/terrain';
+import { FLAT, grade, type Ground } from '../world/terrain';
 
 const WHEEL_RADIUS = 0.3;
 
@@ -78,7 +78,7 @@ export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
       const fz = Math.cos(state.heading);
       const y = ground.y(state.x, state.z);
       // pitch from the ground 1.5 m ahead/behind, roll from 1 m left/right (local +x is left)
-      const pitch = -Math.atan2(ground.y(state.x + fx * 1.5, state.z + fz * 1.5) - ground.y(state.x - fx * 1.5, state.z - fz * 1.5), 3);
+      const pitch = -Math.atan(grade(ground, state.x, state.z, state.heading));
       const roll = Math.atan2(ground.y(state.x + fz, state.z - fx) - ground.y(state.x - fz, state.z + fx), 2);
       group.position.set(state.x, y, state.z);
       group.rotation.set(pitch, state.heading, roll, 'YXZ');

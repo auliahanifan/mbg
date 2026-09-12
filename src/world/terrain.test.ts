@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HALF_SIZE } from './osm';
-import { mdplAt, smooth, densify, makeGround, type Dem } from './terrain';
+import { mdplAt, smooth, densify, makeGround, grade, EXAGGERATION, type Dem } from './terrain';
 
 const dem: Dem = { step: 2 * HALF_SIZE, n: 2, h: [10, 20, 30, 40] }; // one cell over the whole map
 
@@ -22,8 +22,18 @@ describe('smooth / makeGround', () => {
     const spike = smooth({ step: 1, n: 3, h: [0, 0, 0, 0, 9, 0, 0, 0, 0] }, 1);
     expect(spike.h[4]).toBe(1);
     const g = makeGround(dem);
-    expect(g.base).toBeLessThanOrEqual(Math.min(...g.dem.h));
     expect(g.y(-HALF_SIZE, -HALF_SIZE)).toBeGreaterThanOrEqual(0);
+    expect(g.mdpl(-HALF_SIZE, -HALF_SIZE)).toBe(g.dem.h[0]); // HUD reads real metres, not the stretched world y
+    expect(g.y(HALF_SIZE, HALF_SIZE) - g.y(-HALF_SIZE, -HALF_SIZE)).toBeCloseTo((g.dem.h[3] - g.dem.h[0]) * EXAGGERATION);
+  });
+});
+
+describe('grade', () => {
+  it('is rise over run along the heading, positive uphill', () => {
+    const g = { ...makeGround(dem), y: (_x: number, z: number) => z * 0.1 }; // 10 % grade rising toward +z
+    expect(grade(g, 0, 0, 0)).toBeCloseTo(0.1); // heading 0 = +z
+    expect(grade(g, 0, 0, Math.PI)).toBeCloseTo(-0.1);
+    expect(grade(g, 0, 0, Math.PI / 2)).toBeCloseTo(0);
   });
 });
 

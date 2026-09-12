@@ -45,7 +45,7 @@ export function createHud(city: City, ground: Ground = FLAT) {
     update(quest: Quest, car: CarState) {
       const timer = quest.phase === 'delivering' ? ` · ⏱ ${fmt(quest.timeLeft)}` : '';
       q.innerHTML = `${questText(quest)}<small>Ronde ${quest.round} · Skor ${quest.score}${timer}</small>`;
-      speed.innerHTML = `${Math.round(Math.abs(car.speed) * KMH_PER_UNIT)}<span>km/j</span><small>${Math.round(ground.y(car.x, car.z) + ground.base)} mdpl</small>`;
+      speed.innerHTML = `${Math.round(Math.abs(car.speed) * KMH_PER_UNIT)}<span>km/j</span><small>${Math.round(ground.mdpl(car.x, car.z))} mdpl</small>`;
       toast.textContent = quest.toast;
       toast.style.opacity = quest.toastTtl > 0 ? '1' : '0';
 

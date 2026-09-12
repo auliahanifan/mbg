@@ -3,10 +3,14 @@ import { HALF_SIZE } from './osm';
 export const DEM_STEP = 40; // metres between samples (scripts/fetch-dem.mjs)
 /** Elevation grid: h[j * n + i] is metres above sea level at x = -HALF_SIZE + i·step, z = -HALF_SIZE + j·step. */
 export interface Dem { step: number; n: number; h: number[] }
-/** World height (y = MDPL − base, so the lowest point sits near y = 0) plus the base to recover MDPL for the HUD. */
-export interface Ground { y: (x: number, z: number) => number; base: number; dem: Dem }
+/** World height (y = (MDPL − base) · EXAGGERATION, so the lowest point sits near y = 0) plus real MDPL for the HUD. */
+export interface Ground { y: (x: number, z: number) => number; mdpl: (x: number, z: number) => number; dem: Dem }
+/** Purwokerto's real relief is ~60 m over the 3.4 km map (median 2 % grade): true to scale it reads as flat, so heights are stretched. Shape stays the SRTM contour. */
+export const EXAGGERATION = 2.5;
+/** Arcade gravity along the road (m/s² per unit grade), tuned against ACCEL/ROLLING so climbs cost and descents roll. */
+export const GRAVITY = 25;
 
-export const FLAT: Ground = { y: () => 0, base: 0, dem: { step: 2 * HALF_SIZE, n: 2, h: [0, 0, 0, 0] } };
+export const FLAT: Ground = { y: () => 0, mdpl: () => 0, dem: { step: 2 * HALF_SIZE, n: 2, h: [0, 0, 0, 0] } };
 
 /** 3×3 box blur, edge-clamped, `passes` times: SRTM in a city carries ±2 m rooftop noise that would make roads bounce. Pure. */
 export function smooth(dem: Dem, passes = 2): Dem {
@@ -45,7 +49,14 @@ export function mdplAt(dem: Dem, x: number, z: number): number {
 export function makeGround(raw: Dem): Ground {
   const dem = smooth(raw);
   const base = Math.floor(Math.min(...dem.h));
-  return { y: (x, z) => mdplAt(dem, x, z) - base, base, dem };
+  return { y: (x, z) => (mdplAt(dem, x, z) - base) * EXAGGERATION, mdpl: (x, z) => mdplAt(dem, x, z), dem };
+}
+
+/** Rise over run of the ground along `heading`, sampled ±r metres around (x, z): positive = uphill ahead. */
+export function grade(g: Ground, x: number, z: number, heading: number, r = 1.5): number {
+  const fx = Math.sin(heading) * r;
+  const fz = Math.cos(heading) * r;
+  return (g.y(x + fx, z + fz) - g.y(x - fx, z - fz)) / (2 * r);
 }
 
 /** Inserts points so no segment is longer than maxLen; ribbons then follow the ground between road nodes. Pure. */

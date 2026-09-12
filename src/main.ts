@@ -5,7 +5,7 @@ import { buildRoads } from './render/roads';
 import { buildBuildings } from './render/buildings';
 import { buildLandmarks } from './render/landmarks';
 import { buildTerrain, buildGround } from './render/terrain';
-import { makeGround, type Dem } from './world/terrain';
+import { makeGround, grade, GRAVITY, type Dem } from './world/terrain';
 import { loadCity, nearestEdge, pointOnEdge } from './world/city';
 import { project, SPAWN, type CityData } from './world/osm';
 import { routeLength } from './world/routing';
@@ -54,7 +54,7 @@ const clock = new THREE.Clock();
 ctx.renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   const input = readCarInput();
-  car = stepCar(car, input, dt);
+  car = stepCar(car, input, dt, GRAVITY * grade(ground, car.x, car.z, car.heading));
   stepTraffic(city, traffic, [car], dt, Math.random, car);
   const resolved = resolveCar(car, boxesAround(occupancy, car.x, car.z), trafficCircles(traffic));
   if (resolved !== car) sound.hit(Math.abs(car.speed));

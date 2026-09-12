@@ -14,6 +14,8 @@ export async function loadModel(name: string): Promise<THREE.Group> {
           if ((o as THREE.Mesh).isMesh) {
             o.castShadow = true;
             o.receiveShadow = true;
+            const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
+            if (m.isMeshStandardMaterial) { m.roughness = 0.38; m.metalness = 0.2; m.envMapIntensity = 1.3; } // car paint: picks up the sky
           }
         });
         return gltf.scene;

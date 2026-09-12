@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { area, hash, orientedBox, type CityData, type OrientedBox } from '../world/osm';
 import { FLAT, type Ground } from '../world/terrain';
 
-const WALLS = [0xf4efe6, 0xe9e1d2, 0xf7f3ea, 0xdfe6ea, 0xf3e7cf, 0xe6ece0, 0xd8cfc4];
+const WALLS = [0xe6e0d4, 0xd9d0bf, 0xece7dc, 0xcdd4d8, 0xe4d7bd, 0xd6dccf, 0xc9bfb3, 0xb9c4b0, 0xd8c9b8];
 const HIP_ROOFS = [0xa9513a, 0xb4623f, 0x93493a, 0xc26d4a, 0xa9513a, 0x72757c, 0x4d4b49]; // mostly genteng, some zinc / asbes
 const FLAT_ROOFS = [0x9d9c98, 0x8f918f, 0xa8a49d];
 const DOME = 0x3a9a68;
@@ -88,17 +88,28 @@ const canvas = (draw: (g: CanvasRenderingContext2D) => void): THREE.Texture => {
   return t;
 };
 const window_ = (g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
-  g.fillStyle = '#cfd6da'; g.fillRect(x, y, w, h); // frame
-  g.fillStyle = '#42505f'; g.fillRect(x + 4, y + 4, w - 8, h - 8); // glass
+  g.fillStyle = '#b9bfc2'; g.fillRect(x, y, w, h); // frame
+  const glass = g.createLinearGradient(0, y, 0, y + h);
+  glass.addColorStop(0, '#6f8499'); glass.addColorStop(1, '#2b3540'); // sky reflection fading to a dark interior
+  g.fillStyle = glass; g.fillRect(x + 4, y + 4, w - 8, h - 8);
+  g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(x, y, w, 3); // lintel shadow
+};
+/** Rain streaks and soot creeping up from the ground; drawn last over every ground-floor texture. */
+const grime = (g: CanvasRenderingContext2D) => {
+  const grad = g.createLinearGradient(0, 128, 0, 70);
+  grad.addColorStop(0, 'rgba(40,35,30,0.5)'); grad.addColorStop(1, 'rgba(40,35,30,0)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(0,0,0,${0.03 + (i % 5) / 60})`; g.fillRect((i * 37) % 128, 0, 1 + (i % 3), 128); }
 };
 /** Upper storeys: one window per 3 m (glass spans 1.0–2.5 m above the floor). */
-const upperTexture = () => canvas((g) => window_(g, 40, 30, 48, 58));
+const upperTexture = () => canvas((g) => { window_(g, 40, 30, 48, 58); g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, 118, 128, 10); });
 /** House ground floor over 9 m: window, door, window; plinth band along the bottom. */
 const houseTexture = () => canvas((g) => {
   window_(g, 8, 34, 28, 50);
   window_(g, 92, 34, 28, 50);
   g.fillStyle = '#6b4a2e'; g.fillRect(52, 30, 24, 98); // wooden door to the ground
   g.fillStyle = '#b8b0a4'; g.fillRect(0, 116, 128, 12); // plinth
+  grime(g);
 });
 /** Ruko ground floor: glass shopfront, half-open rolling shutter, signboard band at the top. */
 const rukoTexture = () => canvas((g) => {
@@ -106,12 +117,14 @@ const rukoTexture = () => canvas((g) => {
   g.fillStyle = '#8f949a'; for (let y = 30; y < 62; y += 6) g.fillRect(6, y, 116, 3); // shutter slats
   g.fillStyle = '#d64541'; g.fillRect(0, 0, 128, 26); // signboard
   g.fillStyle = '#fff'; g.fillRect(14, 8, 60, 10); g.fillRect(84, 8, 30, 10); // lettering blocks
+  grime(g);
 });
 /** Genteng: 4 tile rows per repeat, staggered columns, darker lower lip on each tile. */
 const tileTexture = () => canvas((g) => {
   for (let row = 0; row < 4; row++) {
     const y = row * 32;
     g.fillStyle = '#e8e0d8'; g.fillRect(0, y, 128, 32);
+    for (let k = 0; k < 24; k++) { g.fillStyle = `rgba(60,50,40,${0.05 + ((k * 7 + row) % 5) / 40})`; g.fillRect((k * 53 + row * 17) % 128, y + ((k * 11) % 24), 6, 5); } // moss / weathering
     g.fillStyle = '#9c9088'; g.fillRect(0, y + 26, 128, 6); // shadow under the tile lip
     g.fillStyle = '#cfc6bd';
     for (let col = 0; col < 8; col++) g.fillRect(col * 16 + (row % 2 ? 8 : 0), y, 2, 26);
@@ -184,7 +197,7 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     }
   }
   // ponytail: DoubleSide instead of normalising ring winding; fix winding if fill rate ever shows in a profile
-  const textured = (map: THREE.Texture) => new THREE.MeshStandardMaterial({ map, vertexColors: true, roughness: 0.85, side: THREE.DoubleSide });
+  const textured = (map: THREE.Texture) => new THREE.MeshStandardMaterial({ map, vertexColors: true, roughness: 0.8, envMapIntensity: 0.6, side: THREE.DoubleSide });
   const group = new THREE.Group();
   const meshes: [Batch, THREE.Material][] = [
     [house, textured(houseTexture())],

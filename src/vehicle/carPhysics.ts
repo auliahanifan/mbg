@@ -12,9 +12,9 @@ const TURN_RATE = 2.2; // rad/s at full grip
 const moveToward = (v: number, target: number, maxDelta: number) =>
   Math.abs(target - v) <= maxDelta ? target : v + Math.sign(target - v) * maxDelta;
 
-/** Arcade car model: scalar speed along heading, steering scaled by speed. Pure. */
-export function stepCar(s: CarState, input: CarInput, dt: number): CarState {
-  let speed = s.speed;
+/** Arcade car model: scalar speed along heading, steering scaled by speed; `slope` is the road grade ahead (rise/run) times GRAVITY. Pure. */
+export function stepCar(s: CarState, input: CarInput, dt: number, slope = 0): CarState {
+  let speed = s.speed - slope * dt;
   if (input.brake) speed = moveToward(speed, 0, BRAKE * dt);
   else if (input.throttle > 0) speed = moveToward(speed, MAX_SPEED, ACCEL * input.throttle * dt);
   else if (input.throttle < 0) speed = moveToward(speed, -REVERSE_MAX, ACCEL * -input.throttle * dt);

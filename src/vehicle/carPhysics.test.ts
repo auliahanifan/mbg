@@ -31,6 +31,16 @@ describe('stepCar', () => {
     expect(stepCar(moving, { ...idle, steer: 1 }, 0.1).heading).toBeGreaterThan(0);
     expect(stepCar(moving, { ...idle, steer: -1 }, 0.1).heading).toBeLessThan(0);
   });
+  it('slope: uphill accelerates slower, a steep descent keeps a coasting car rolling', () => {
+    const flat = run(rest, { ...idle, throttle: 1 }, 1);
+    let up = rest;
+    for (let t = 0; t < 1; t += 1 / 60) up = stepCar(up, { ...idle, throttle: 1 }, 1 / 60, 25 * 0.1);
+    expect(up.speed).toBeLessThan(flat.speed);
+    let down = { ...rest, speed: 10 };
+    for (let t = 0; t < 3; t += 1 / 60) down = stepCar(down, idle, 1 / 60, -25 * 0.2);
+    expect(down.speed).toBeGreaterThan(5);
+    expect(run({ ...rest, speed: 10 }, idle, 3).speed).toBeLessThan(2);
+  });
   it('steering is mirrored in reverse', () => {
     expect(stepCar({ ...rest, speed: -5 }, { ...idle, steer: 1 }, 0.1).heading).toBeLessThan(0);
   });

@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { hash, HALF_SIZE, type CityData } from '../world/osm';
 import { densify, type Ground } from '../world/terrain';
-import { ribbon, merge, lift, type Geo } from './roads';
+import { ribbon, merge, lift, grimeTexture, type Geo } from './roads';
 
 const AREA: Record<NonNullable<CityData['areas']>[number]['k'], string> = {
-  grass: '#6f9a3f', wood: '#4f7a34', farm: '#9bb457', water: '#5b8a8c', sand: '#c9b98a', paved: '#8d8d88',
+  grass: '#647f3a', wood: '#46612e', farm: '#8c9a4c', water: '#4f6f72', sand: '#b3a47c', paved: '#7d7c78',
 };
-const SOIL = '#6e7d44';
+const SOIL = '#6a6b44';
 const Y = { water: 0.015, ballast: 0.045, rail: 0.09 };
 const GAUGE = 1.067; // Indonesian narrow gauge
 const TEX_PX = 1700; // 2 m per texel over the ±HALF_SIZE map
@@ -31,11 +31,12 @@ function groundTexture(areas: NonNullable<CityData['areas']>): THREE.CanvasTextu
     a.p.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z)));
     g.fill();
   }
-  g.globalAlpha = 0.12; // mottle so the soil and grass are not flat colour
-  for (let i = 0; i < 60000; i++) {
+  g.globalAlpha = 0.14; // mottle so the soil and grass are not flat colour
+  for (let i = 0; i < 160000; i++) {
     const h = hash(i, 7);
-    g.fillStyle = h & 1 ? '#000' : '#fff';
-    g.fillRect(((h >>> 1) % 3400) - HALF_SIZE, ((h >>> 13) % 3400) - HALF_SIZE, 4, 4);
+    g.fillStyle = h & 1 ? '#1a1a10' : h & 2 ? '#d8d0a0' : '#fff';
+    const s = 2 + (h >>> 24) % 9;
+    g.fillRect(((h >>> 1) % 3400) - HALF_SIZE, ((h >>> 13) % 3400) - HALF_SIZE, s, s);
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -69,7 +70,12 @@ export function buildGround(ground: Ground, areas: NonNullable<CityData['areas']
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
   geo.computeVertexNormals();
+  const detail = grimeTexture();
   const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: groundTexture(areas), roughness: 1 }));
+  // ponytail: second UV set + aoMap as a cheap close-range detail layer; a real detail-map shader chunk if it ever needs to be stronger
+  geo.setAttribute('uv1', new THREE.BufferAttribute(new Float32Array(Array.from({ length: positions.length / 3 }, (_, i) => [positions[3 * i] / 9, positions[3 * i + 2] / 9]).flat()), 2));
+  (m.material as THREE.MeshStandardMaterial).aoMap = detail;
+  (m.material as THREE.MeshStandardMaterial).aoMapIntensity = 0.8;
   m.receiveShadow = true;
   return m;
 }
@@ -101,7 +107,7 @@ export function buildTerrain(data: CityData, ground: Ground): THREE.Group {
   const trees = data.trees ?? [];
   if (trees.length) {
     const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.28, 1, 6).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ color: 0x5b4634, roughness: 1 }), trees.length);
-    const crown = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 7, 5), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), trees.length);
+    const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), trees.length);
     const o = new THREE.Object3D();
     const c = new THREE.Color();
     trees.forEach(([x, z], i) => {
@@ -113,7 +119,7 @@ export function buildTerrain(data: CityData, ground: Ground): THREE.Group {
       trunk.setMatrixAt(i, o.matrix);
       o.position.set(x, y + height - r * 0.5, z); o.scale.set(r, r * 0.85, r); o.rotation.set(0, (h % 628) / 100, 0); o.updateMatrix();
       crown.setMatrixAt(i, o.matrix);
-      crown.setColorAt(i, c.setHSL(0.27 + ((h >>> 8) % 20) / 200, 0.45, 0.22 + ((h >>> 16) % 20) / 100));
+      crown.setColorAt(i, c.setHSL(0.24 + ((h >>> 8) % 20) / 200, 0.32, 0.18 + ((h >>> 16) % 20) / 120));
     });
     trunk.castShadow = crown.castShadow = true;
     g.add(trunk, crown);
