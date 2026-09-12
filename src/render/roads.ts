@@ -6,7 +6,7 @@ const DASH = 3;
 const MARK_W = 0.15;
 const Y = { sidewalk: 0.02, asphalt: 0.04, marking: 0.06 };
 
-type Geo = { positions: number[]; indices: number[] };
+export type Geo = { positions: number[]; indices: number[] };
 
 /** Triangle strip along a polyline: vertices 2i (left, +normal) and 2i+1 (right) per point, mitered at interior points. Pure. */
 export function ribbon(pts: [number, number][], width: number, y: number): Geo {
@@ -58,7 +58,7 @@ export function disc(x: number, z: number, r: number, y: number, segments = 16):
   return { positions, indices };
 }
 
-function merge(parts: Geo[]): THREE.BufferGeometry {
+export function merge(parts: Geo[]): THREE.BufferGeometry {
   const positions: number[] = [];
   const indices: number[] = [];
   for (const g of parts) {

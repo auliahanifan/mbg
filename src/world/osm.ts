@@ -22,11 +22,16 @@ export const bbox = () => ({
 
 export interface CityPoi { id: string; name: string; kind: 'kitchen' | 'school' | 'landmark'; x: number; z: number }
 export type Roof = 'hip' | 'dome';
+export type AreaKind = 'grass' | 'wood' | 'farm' | 'water' | 'sand' | 'paved';
+export type LineKind = 'rail' | 'river' | 'stream';
 export interface CityData {
   nodes: [number, number][];
   ways: { n: number[]; w: number; name?: string }[];
   buildings: { p: [number, number][]; h: number; r?: Roof }[];
   pois: CityPoi[];
+  areas?: { p: [number, number][]; k: AreaKind }[]; // closed landuse / water rings
+  lines?: { p: [number, number][]; k: LineKind }[]; // rail and waterways
+  trees?: [number, number][];
 }
 
 export type OsmElement =
@@ -132,6 +137,50 @@ export function classify(tags: Record<string, string>, ring: [number, number][])
   return { h: round1(explicit || floors * FLOOR) };
 }
 
+export function areaKind(t: Record<string, string>): AreaKind | null {
+  if (t.natural === 'water' || t.leisure === 'swimming_pool') return 'water';
+  if (t.natural === 'wood' || t.landuse === 'forest' || t.landuse === 'orchard') return 'wood';
+  if (t.landuse === 'farmland') return 'farm';
+  if (t.natural === 'beach' || t.natural === 'sand') return 'sand';
+  if (t.amenity === 'parking') return 'paved';
+  if (/^(grass|meadow|cemetery|village_green)$/.test(t.landuse ?? '') || /^(park|garden|pitch|golf_course|stadium|track)$/.test(t.leisure ?? '') || /^(grassland|lawn|scrub)$/.test(t.natural ?? '')) return 'grass';
+  return null;
+}
+
+export function lineKind(t: Record<string, string>): LineKind | null {
+  if (t.railway === 'rail') return 'rail';
+  if (t.waterway === 'river' || t.waterway === 'canal') return 'river';
+  if (/^(stream|drain|ditch)$/.test(t.waterway ?? '')) return 'stream';
+  return null;
+}
+
+/** Even-odd ray cast. */
+export function pointInRing(x: number, z: number, ring: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, zi] = ring[i];
+    const [xj, zj] = ring[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Deterministic jittered grid of points inside the ring, one per `spacing` metres. */
+export function scatter(ring: [number, number][], spacing: number): [number, number][] {
+  const xs = ring.map((p) => p[0]);
+  const zs = ring.map((p) => p[1]);
+  const out: [number, number][] = [];
+  for (let z = Math.min(...zs); z < Math.max(...zs); z += spacing) {
+    for (let x = Math.min(...xs); x < Math.max(...xs); x += spacing) {
+      const h = hash(x, z);
+      const px = round1(x + ((h % 1000) / 1000 - 0.5) * spacing);
+      const pz = round1(z + (((h >>> 10) % 1000) / 1000 - 0.5) * spacing);
+      if (pointInRing(px, pz, ring)) out.push([px, pz]);
+    }
+  }
+  return out;
+}
+
 /** Unnamed ways inherit the name of a named way they continue nearly straight (≤ 30°) at a shared end node; repeated so chains fill in. */
 export function propagateNames(nodes: [number, number][], ways: CityData['ways']): void {
   const touching = new Map<number, number[]>();
@@ -183,9 +232,18 @@ export function buildCityData(elements: OsmElement[]): CityData {
   };
   const ways: CityData['ways'] = [];
   const buildings: CityData['buildings'] = [];
+  const areas: NonNullable<CityData['areas']> = [];
+  const lines: NonNullable<CityData['lines']> = [];
+  const trees: [number, number][] = [];
   for (const e of elements) {
-    if (e.type !== 'way' || !e.tags) continue;
+    if (!e.tags) continue;
+    if (e.type === 'node') {
+      if (e.tags.natural === 'tree') trees.push(project(e.lat, e.lon));
+      continue;
+    }
     if (e.nodes.some((id) => !latLon.has(id))) continue;
+    const closed = e.nodes.length >= 4 && e.nodes[0] === e.nodes[e.nodes.length - 1];
+    const ring = () => e.nodes.slice(0, -1).map((id) => project(...latLon.get(id)!));
     if (e.tags.highway) {
       const w = widthOf(e.tags.highway);
       if (w === null || e.nodes.length < 2) continue;
@@ -194,10 +252,17 @@ export function buildCityData(elements: OsmElement[]): CityData {
       if (name) way.name = name;
       ways.push(way);
     } else if (e.tags.building) {
-      const closed = e.nodes.length >= 4 && e.nodes[0] === e.nodes[e.nodes.length - 1];
       if (!closed) continue;
-      const p = e.nodes.slice(0, -1).map((id) => project(...latLon.get(id)!));
+      const p = ring();
       buildings.push({ p, ...classify(e.tags, p) });
+    } else if (closed && areaKind(e.tags)) {
+      const k = areaKind(e.tags)!;
+      const p = ring();
+      areas.push({ p, k });
+      if (k === 'wood') trees.push(...scatter(p, 8));
+      else if (k === 'grass') trees.push(...scatter(p, 30));
+    } else if (!closed && lineKind(e.tags) && !e.tags.tunnel) {
+      lines.push({ p: e.nodes.map((id) => project(...latLon.get(id)!)), k: lineKind(e.tags)! });
     }
   }
   propagateNames(nodes, ways);
@@ -205,5 +270,5 @@ export function buildCityData(elements: OsmElement[]): CityData {
     const [x, z] = project(lat, lon);
     return { ...rest, x, z };
   });
-  return { nodes, ways, buildings, pois };
+  return { nodes, ways, buildings, pois, areas, lines, trees };
 }

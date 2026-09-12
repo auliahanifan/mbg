@@ -35,7 +35,8 @@ export function createHud(city: City) {
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   const mg = root.querySelector<HTMLCanvasElement>('#map')!.getContext('2d')!;
   const SCALE = MAP_PX / MAP_M;
-  const { nodes, ways } = city.data;
+  const { nodes, ways, areas = [], lines = [] } = city.data;
+  const AREA_FILL: Record<string, string> = { grass: '#3f6b2a', wood: '#2f5522', farm: '#5c7a2e', water: '#2f5f73', sand: '#7d7150', paved: '#3a3d44' };
   let field: RouteField | null = null;
 
   return {
@@ -57,8 +58,21 @@ export function createHud(city: City) {
       mg.translate(MAP_PX / 2, MAP_PX / 2);
       mg.scale(SCALE, SCALE);
       mg.translate(-car.x, -car.z);
+      for (const a of areas) {
+        mg.fillStyle = AREA_FILL[a.k];
+        mg.beginPath();
+        a.p.forEach(([x, z], i) => (i ? mg.lineTo(x, z) : mg.moveTo(x, z)));
+        mg.fill();
+      }
       mg.lineCap = 'round';
       mg.lineJoin = 'round';
+      for (const l of lines) {
+        mg.strokeStyle = l.k === 'rail' ? '#6b655c' : '#2f5f73';
+        mg.lineWidth = l.k === 'river' ? 10 : 4;
+        mg.beginPath();
+        l.p.forEach(([x, z], i) => (i ? mg.lineTo(x, z) : mg.moveTo(x, z)));
+        mg.stroke();
+      }
       mg.strokeStyle = '#9aa5a0';
       for (const w of ways) {
         // ponytail: draws every way each frame (~2k polylines, ~1 ms); cull by bbox if the minimap ever shows in a profile

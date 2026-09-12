@@ -10,8 +10,8 @@ export function gridFromImage(rgba: Uint8ClampedArray, size: number, origin: num
   return { size, origin, cells };
 }
 
-/** Rasterises building footprints at 1 m/cell by filling them on an offscreen canvas (canvas x = world x, canvas y = world z). */
-export function rasterize(buildings: { p: [number, number][] }[], size = HALF_SIZE * 2, origin = -HALF_SIZE): Occupancy {
+/** Rasterises building footprints (and 1 m tree discs) at 1 m/cell by filling them on an offscreen canvas (canvas x = world x, canvas y = world z). */
+export function rasterize(buildings: { p: [number, number][] }[], trees: [number, number][] = [], size = HALF_SIZE * 2, origin = -HALF_SIZE): Occupancy {
   const c = document.createElement('canvas');
   c.width = size;
   c.height = size;
@@ -24,6 +24,7 @@ export function rasterize(buildings: { p: [number, number][] }[], size = HALF_SI
     g.closePath();
     g.fill();
   }
+  for (const [x, z] of trees) g.fillRect(x - 0.5, z - 0.5, 1, 1);
   return gridFromImage(g.getImageData(0, 0, size, size).data, size, origin);
 }
 

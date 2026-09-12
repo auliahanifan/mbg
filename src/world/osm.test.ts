@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CENTER, project, bbox, widthOf, area, orientedBox, classify, propagateNames, buildCityData, type OsmElement } from './osm';
+import { CENTER, project, bbox, widthOf, area, orientedBox, classify, propagateNames, buildCityData, areaKind, lineKind, pointInRing, scatter, type OsmElement } from './osm';
 
 describe('project', () => {
   it('maps the centre to the origin, north to -z, east to +x', () => {
@@ -138,5 +138,27 @@ describe('propagateNames', () => {
     const ways = [{ n: [0, 1], w: 6, name: 'Jalan A' }, { n: [3, 1], w: 6, name: 'Jalan B' }, { n: [1, 2], w: 6 }];
     propagateNames(nodes, ways);
     expect(ways[2].name).toBe('Jalan A');
+  });
+});
+
+describe('terrain classification', () => {
+  it('maps tags to area / line kinds', () => {
+    expect(areaKind({ leisure: 'park' })).toBe('grass');
+    expect(areaKind({ natural: 'wood' })).toBe('wood');
+    expect(areaKind({ landuse: 'farmland' })).toBe('farm');
+    expect(areaKind({ natural: 'water' })).toBe('water');
+    expect(areaKind({ landuse: 'residential' })).toBeNull();
+    expect(lineKind({ railway: 'rail' })).toBe('rail');
+    expect(lineKind({ railway: 'disused' })).toBeNull();
+    expect(lineKind({ waterway: 'drain' })).toBe('stream');
+  });
+  it('scatter stays inside the ring at roughly one point per cell', () => {
+    const ring: [number, number][] = [[0, 0], [100, 0], [100, 100], [0, 100]];
+    const pts = scatter(ring, 10);
+    expect(pts.length).toBeGreaterThan(60);
+    expect(pts.length).toBeLessThanOrEqual(100);
+    for (const [x, z] of pts) expect(pointInRing(x, z, ring)).toBe(true);
+    expect(pointInRing(150, 50, ring)).toBe(false);
+    expect(scatter(ring, 10)).toEqual(pts); // deterministic
   });
 });

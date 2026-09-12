@@ -4,6 +4,7 @@ import { createPost } from './render/post';
 import { buildRoads } from './render/roads';
 import { buildBuildings } from './render/buildings';
 import { buildLandmarks } from './render/landmarks';
+import { buildTerrain } from './render/terrain';
 import { loadCity, nearestEdge, pointOnEdge } from './world/city';
 import { project, SPAWN, type CityData } from './world/osm';
 import { routeLength } from './world/routing';
@@ -24,8 +25,8 @@ const ctx = createScene(canvas);
 const post = createPost(ctx);
 const data: CityData = await (await fetch('/purwokerto.json')).json();
 const city = loadCity(data);
-ctx.scene.add(buildRoads(city), buildBuildings(data.buildings), buildLandmarks(data.pois));
-const occupancy = rasterize(data.buildings);
+ctx.scene.add(buildTerrain(data), buildRoads(city), buildBuildings(data.buildings), buildLandmarks(data.pois));
+const occupancy = rasterize(data.buildings, data.trees);
 const player = await createPlayerCar(ctx.scene);
 const chase = createChaseCamera(ctx);
 
