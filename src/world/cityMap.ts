@@ -1,4 +1,6 @@
-export const TILE = 8;
+export const TILE = 12;
+/** Half-size of the solid part of a non-road tile; the rest is drivable pavement. */
+export const BLOCK_HALF = 4.5;
 export type Dir = 'N' | 'E' | 'S' | 'W';
 export const DIRS: Dir[] = ['N', 'E', 'S', 'W'];
 export const DIR_VEC: Record<Dir, { dx: number; dz: number }> = {
@@ -84,7 +86,7 @@ export function collisionBoxes(map: string[]): Box[] {
     [...line].forEach((ch, col) => {
       if (ch === 'R') return;
       const { x, z } = tileCenter(row, col);
-      out.push({ minX: x - TILE / 2, maxX: x + TILE / 2, minZ: z - TILE / 2, maxZ: z + TILE / 2 });
+      out.push({ minX: x - BLOCK_HALF, maxX: x + BLOCK_HALF, minZ: z - BLOCK_HALF, maxZ: z + BLOCK_HALF });
     }),
   );
   return out;

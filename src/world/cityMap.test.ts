@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MAP, TILE, rotateDir, opposite, leftOf, headingOf, tileAt, isRoad, tileCenter, worldToTile,
+  MAP, TILE, BLOCK_HALF, rotateDir, opposite, leftOf, headingOf, tileAt, isRoad, tileCenter, worldToTile,
   roadSides, pickRoadModel, collisionBoxes, findPois, roadTiles,
 } from './cityMap';
 
@@ -38,9 +38,11 @@ describe('tiles', () => {
     expect(isRoad(small, 2, 2)).toBe(false);
   });
   it('converts tile <-> world', () => {
-    expect(tileCenter(2, 3)).toEqual({ x: 24, z: 16 });
-    expect(worldToTile(24, 16)).toEqual({ row: 2, col: 3 });
-    expect(worldToTile(27.9, 12.1)).toEqual({ row: 2, col: 3 });
+    expect(TILE).toBe(12);
+    expect(BLOCK_HALF).toBe(4.5);
+    expect(tileCenter(2, 3)).toEqual({ x: 36, z: 24 });
+    expect(worldToTile(36, 24)).toEqual({ row: 2, col: 3 });
+    expect(worldToTile(41.9, 18.1)).toEqual({ row: 2, col: 3 });
   });
   it('lists road neighbours', () => {
     expect(roadSides(small, 1, 1)).toEqual(['E', 'S']);
@@ -77,7 +79,7 @@ describe('collisionBoxes', () => {
   it('makes one 8x8 box per non-road tile', () => {
     const boxes = collisionBoxes(small);
     expect(boxes.length).toBe(16 - 3);
-    expect(boxes).toContainEqual({ minX: 2 * TILE - 4, maxX: 2 * TILE + 4, minZ: 2 * TILE - 4, maxZ: 2 * TILE + 4 });
+    expect(boxes).toContainEqual({ minX: 2 * TILE - BLOCK_HALF, maxX: 2 * TILE + BLOCK_HALF, minZ: 2 * TILE - BLOCK_HALF, maxZ: 2 * TILE + BLOCK_HALF });
   });
 });
 
@@ -88,7 +90,7 @@ describe('findPois', () => {
     const k = pois[0];
     expect(k.kind).toBe('kitchen');
     expect(k.name).toBe('Dapur SPPG');
-    expect(k).toMatchObject({ row: 3, col: 3, stop: { row: 2, col: 3, x: 24, z: 16 } });
+    expect(k).toMatchObject({ row: 3, col: 3, stop: { row: 2, col: 3, x: 36, z: 24 } });
     for (const p of pois) expect(isRoad(MAP, p.stop.row, p.stop.col)).toBe(true);
   });
   it('throws when a POI has no adjacent road', () => {
