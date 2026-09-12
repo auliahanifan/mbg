@@ -16,6 +16,8 @@ import { createChaseCamera } from './camera/chaseCamera';
 import { createQuest, stepQuest, questTarget, questPois, type Quest } from './quest/quest';
 import { createHud } from './ui/hud';
 import { createMarkers } from './quest/markers';
+import { spawnTraffic, stepTraffic, trafficCircles } from './traffic/traffic';
+import { createTrafficRenderer } from './traffic/trafficRenderer';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = createScene(canvas);
@@ -36,6 +38,8 @@ const spawnEdge = nearestEdge(city, sx, sz);
 const spawn = pointOnEdge(city, spawnEdge.edge, spawnEdge.t);
 const resetCar = (): CarState => ({ x: spawn.x, z: spawn.z, heading: spawn.heading, speed: 0 });
 let car = resetCar();
+const traffic = spawnTraffic(city, 30, Math.random, car);
+const trafficView = await createTrafficRenderer(ctx.scene, traffic);
 let quest: Quest = createQuest(kitchen, schools, 1, routeLen);
 const hud = createHud(city);
 const markers = createMarkers(ctx.scene);
@@ -46,7 +50,9 @@ ctx.renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   const input = readCarInput();
   car = stepCar(car, input, dt);
-  car = resolveCar(car, boxesAround(occupancy, car.x, car.z), []);
+  stepTraffic(city, traffic, [car], dt, Math.random, car);
+  car = resolveCar(car, boxesAround(occupancy, car.x, car.z), trafficCircles(traffic));
+  trafficView.update(dt);
   player.sync(car, input, dt);
   quest = stepQuest(quest, car, dt);
   if (consumeKey('KeyR') && (quest.phase === 'done' || quest.phase === 'failed')) {

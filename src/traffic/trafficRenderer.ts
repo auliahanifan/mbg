@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadModel } from '../assets';
-type TrafficCar = { x: number; z: number; heading: number; speed: number; model: string };
+import type { TrafficCar } from './traffic';
 
 const WHEEL_RADIUS = 0.3;
 const SMOOTH = 10; // visual lerp hides the lane-offset jump when a car turns a corner
@@ -28,7 +28,9 @@ export async function createTrafficRenderer(scene: THREE.Scene, cars: TrafficCar
       const k = 1 - Math.exp(-SMOOTH * dt);
       cars.forEach((c, i) => {
         const { m, wheels } = meshes[i];
-        m.position.lerp(new THREE.Vector3(c.x, 0, c.z), k);
+        const target = new THREE.Vector3(c.x, 0, c.z);
+        if (m.position.distanceTo(target) > 20) m.position.copy(target); // respawn teleport: don't streak across the map
+        m.position.lerp(target, k);
         m.rotation.y = lerpAngle(m.rotation.y, c.heading, k);
         for (const w of wheels) w.rotation.x += (c.speed * dt) / WHEEL_RADIUS;
       });
