@@ -5,6 +5,7 @@ Game 3D browser bergaya GTA di **Purwokerto asli** (jalan & gedung dari OpenStre
 ## Jalankan
 
 Butuh Node.js ≥ 20.19 (Vite 8).
+Script data OSM (`node scripts/fetch-osm.mjs`) butuh Node ≥ 23.6 (type stripping).
 
     pnpm install
     pnpm dev        # http://localhost:5173

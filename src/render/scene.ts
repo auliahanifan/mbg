@@ -27,7 +27,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
 
   const sunDir = new THREE.Vector3(0.4, 0.55, 0.3).normalize();
   const sky = new Sky();
-  sky.scale.setScalar(2000);
+  sky.scale.setScalar(20000);
   const u = sky.material.uniforms;
   u.sunPosition.value.copy(sunDir);
   u.turbidity.value = 6;

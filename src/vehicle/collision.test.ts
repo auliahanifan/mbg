@@ -43,4 +43,11 @@ describe('resolveCar', () => {
     expect(r.z).toBeLessThan(0);
     expect(r.speed).toBeCloseTo(4);
   });
+  it('collides with a boundary wall box far from the origin', () => {
+    const s = { x: 500, z: 11, heading: 0, speed: 5 };
+    const wall = { minX: -100, maxX: 1100, minZ: 12, maxZ: 62 };
+    const r = resolveCar(s, [wall], []);
+    expect(r.z).toBeLessThan(12);
+    expect(r.speed).toBeLessThan(5);
+  });
 });

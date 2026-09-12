@@ -55,8 +55,6 @@ export function resolveCar(s: CarState, boxes: Box[], circles: Circle[]): CarSta
       hit = true;
     };
     for (const b of boxes) {
-      // ponytail: linear scan over all boxes (~200); grid lookup if it ever shows in a profile
-      if (Math.abs((b.minX + b.maxX) / 2 - c.x) > 30 || Math.abs((b.minZ + b.maxZ) / 2 - c.z) > 30) continue;
       apply(pushOutOfBox(c, b));
     }
     for (const o of circles) apply(pushOutOfCircle(c, o));

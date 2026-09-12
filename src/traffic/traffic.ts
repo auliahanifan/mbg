@@ -8,7 +8,7 @@ const LOOK_WIDTH = 2.5;
 const ACCEL = 6;
 const STUCK_SECONDS = 3;
 const NARROW = 4;
-export const KEEP_RADIUS = 250;
+const KEEP_RADIUS = 250;
 const RESPAWN_RADIUS = 350;
 const SPAWN_MIN = 150;
 const SPAWN_AVOID = 20;
@@ -37,19 +37,19 @@ function placeCar(city: City, c: TrafficCar) {
   c.heading = heading;
 }
 
-/** Random edge whose midpoint is minR..maxR from `near` (falls back to the closest candidate after 50 tries). */
+/** Random edge whose midpoint is minR..maxR from `near`; if none exists, the edge whose midpoint is closest to that ring. */
 function pickEdge(city: City, rng: () => number, near: { x: number; z: number }, minR: number, maxR: number): number {
+  const candidates: number[] = [];
   let best = 0;
   let bestScore = Infinity;
-  for (let i = 0; i < 50; i++) {
-    const ei = Math.floor(rng() * city.edges.length);
+  city.edges.forEach((_, ei) => {
     const p = pointOnEdge(city, ei, 0.5);
     const d = Math.hypot(p.x - near.x, p.z - near.z);
-    if (d >= minR && d <= maxR) return ei;
+    if (d >= minR && d <= maxR) candidates.push(ei);
     const score = d < minR ? minR - d : d - maxR;
     if (score < bestScore) { bestScore = score; best = ei; }
-  }
-  return best;
+  });
+  return candidates.length ? candidates[Math.floor(rng() * candidates.length)] : best;
 }
 
 function respawn(city: City, c: TrafficCar, rng: () => number, near: { x: number; z: number }, minR: number, maxR: number) {

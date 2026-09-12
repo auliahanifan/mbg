@@ -117,3 +117,11 @@ Vitest, modul murni:
 - `quest.test.ts`: `roundTime` baru.
 
 Verifikasi visual manual: drive ke keempat POI, cek simpang mulus, marka tidak menyilang, mobil AI di lajur kiri, tabrakan gedung.
+
+## Amandemen 2026-09-12 (saat eksekusi)
+
+- Area diperluas ke **3,4 × 3,4 km**, pusat digeser ke (−7.4177, 109.2362) agar SPPG Polresta Banyumas (2,3 km utara Alun-alun), GOR Satria dan Stasiun masuk.
+- Setiap simpul polyline adalah simpul graph (bukan hanya simpul bersama/ujung) — simpul berderajat 2 tidak berpengaruh pada traffic/routing.
+- Gunung Slamet di z = −2600, camera far 5000 (peta ±1700 m); sprite label 24 × 4.5.
+- Tembok batas ±1700 m; jalan OSM yang menembus bbox tetap dirender di luar tembok.
+- Diterima sebagai konsekuensi data: ±2–3 % panjang lajur di jalan kecil bersinggungan dengan footprint gedung OSM (tabrakan pelan di sudut gedung).

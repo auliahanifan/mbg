@@ -29,7 +29,7 @@ export function pointOnEdge(city: City, edge: number, t: number): { x: number; z
   return { x: ax + (bx - ax) * t, z: az + (bz - az) * t, heading: Math.atan2(bx - ax, bz - az) };
 }
 
-/** Closest edge to (x, z) by point-segment distance. ponytail: linear scan over ~30k edges (~0.3 ms); grid-bucket it if profiling says so. */
+/** Closest edge to (x, z) by point-segment distance. ponytail: linear scan over ~10k edges (~0.3 ms); grid-bucket it if profiling says so. */
 export function nearestEdge(city: City, x: number, z: number): { edge: number; t: number; dist: number } {
   let best = { edge: -1, t: 0, dist: Infinity };
   city.edges.forEach((e, i) => {

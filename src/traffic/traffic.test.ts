@@ -57,8 +57,8 @@ describe('traffic', () => {
       expect(c.speed).toBe(0);
     }
     const c = car(0, 1, 0);
-    stepTraffic(city, [c], [], 0.01, seq(0.5), { x: 2000, z: 2000 }); // > 350 m away → respawn; rng 0.5 always picks edge 1
-    expect(c.edge).toBe(1);
+    stepTraffic(city, [c], [], 0.01, seq(0.5), { x: 2000, z: 2000 }); // > 350 m away → respawn; no edge is in ring, so closest-to-ring wins (edge 2)
+    expect(c.edge).toBe(2);
     expect(c.dir).toBe(-1);
     expect(c.t).toBe(0.5);
     expect(c.speed).toBe(0);
