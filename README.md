@@ -12,7 +12,7 @@ Script data OSM (`node scripts/fetch-osm.mjs`) butuh Node ≥ 23.6 (type strippi
     pnpm test       # unit test logika (vitest)
     pnpm build      # tsc + vite build -> dist/
 
-Kontrol: W/A/S/D atau panah, Spasi rem, R ulang ronde.
+Kontrol: W/A/S/D atau panah, Spasi rem, H klakson, M bisu, R ulang ronde.
 
 ## Deploy ke Vercel
 
@@ -27,3 +27,4 @@ Logo Badan Gizi Nasional (`public/logo-bgn.png`) diambil dari [bgn.go.id](https:
 Data jalan & gedung Purwokerto (`public/purwokerto.json`) © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, lisensi ODbL. Perbarui dengan `node scripts/fetch-osm.mjs`. Selain jalan & gedung, script juga mengambil landuse (taman, sawah, hutan, parkir), air (sungai, kali, drainase), rel KA, dan pohon (`natural=tree` + sebaran deterministik di hutan/taman) — dirender `src/render/terrain.ts`.
 Ketinggian (MDPL) dari SRTM 30 m via [Open Topo Data](https://www.opentopodata.org) (`public/dem.json`, grid 40 m, dihaluskan 3×3 saat dimuat). Perbarui dengan `node scripts/fetch-dem.mjs`. Jalan, gedung, pohon, mobil, dan kamera mengikuti kontur; HUD menampilkan MDPL.
 Nama jalan diambil dari tag `name` (fallback `alt_name`/`official_name`); ruas tanpa nama mewarisi nama ruas yang diteruskannya lurus (≤ 30°), lihat `propagateNames` di `src/world/osm.ts`.
+Suara (`public/audio`, Ogg mono) diambil ulang & dikonversi dengan `scripts/fetch-audio.sh` (butuh ffmpeg). Mesin = 3 loop rekaman (idle/cruise/high) di-crossfade & di-pitch menurut RPM 4 gigi; mobil lalu lintas terdekat pakai loop posisional (PannerNode). Sumber CC0 dari Freesound: car_idle_loop & car_ignition (AndrewAlexander), Sedan engine loop (Dmitry_mansurev64), SFX_Car_Engine_Outside_RPMHigh (GiocoSound), J1_Car_Horn (Iamgiorgio), Car Crash with Glass (magnuswaker), Small city ambience (felix.blume); [Kenney](https://kenney.nl) Impact Sounds, Music Jingles, Interface Sounds (CC0). Decit ban: [Car tire squeal skid loop](https://opengameart.org/content/car-tire-squeal-skid-loop) oleh Vertigon, CC-BY 3.0.

@@ -27,7 +27,7 @@ export function createHud(city: City, ground: Ground = FLAT) {
     <div id="q" class="box"></div>
     <div id="speed" class="box"></div>
     <div id="toast" class="box"></div>
-    <div id="help" class="box">WASD / panah · Spasi rem · R ulang</div>
+    <div id="help" class="box">WASD / panah · Spasi rem · H klakson · M bisu · R ulang</div>
     <div id="street" class="box" hidden></div>
     <canvas id="map" width="${MAP_PX}" height="${MAP_PX}"></canvas>`;
   const q = root.querySelector<HTMLElement>('#q')!;

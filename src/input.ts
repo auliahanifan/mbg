@@ -25,3 +25,5 @@ export function readCarInput(): CarInput {
 export function consumeKey(code: string): boolean {
   return pressed.delete(code);
 }
+
+export const isDown = (code: string) => down.has(code);

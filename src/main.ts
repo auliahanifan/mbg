@@ -13,7 +13,8 @@ import { rasterize, boxesAround } from './vehicle/occupancy';
 import { stepCar, type CarState } from './vehicle/carPhysics';
 import { resolveCar } from './vehicle/collision';
 import { createPlayerCar } from './vehicle/playerCar';
-import { readCarInput, consumeKey } from './input';
+import { readCarInput, consumeKey, isDown } from './input';
+import { createSound } from './audio/sound';
 import { createChaseCamera } from './camera/chaseCamera';
 import { createQuest, stepQuest, questTarget, questPois, type Quest } from './quest/quest';
 import { createHud } from './ui/hud';
@@ -46,6 +47,7 @@ const trafficView = await createTrafficRenderer(ctx.scene, traffic, ground);
 let quest: Quest = createQuest(kitchen, schools, 1, routeLen);
 const hud = createHud(city, ground);
 const markers = createMarkers(ctx.scene, ground);
+const sound = createSound();
 document.getElementById('loading')!.remove();
 
 const clock = new THREE.Clock();
@@ -54,7 +56,9 @@ ctx.renderer.setAnimationLoop(() => {
   const input = readCarInput();
   car = stepCar(car, input, dt);
   stepTraffic(city, traffic, [car], dt, Math.random, car);
-  car = resolveCar(car, boxesAround(occupancy, car.x, car.z), trafficCircles(traffic));
+  const resolved = resolveCar(car, boxesAround(occupancy, car.x, car.z), trafficCircles(traffic));
+  if (resolved !== car) sound.hit(Math.abs(car.speed));
+  car = resolved;
   trafficView.update(dt);
   player.sync(car, input, dt, ground);
   quest = stepQuest(quest, car, dt);
@@ -65,6 +69,7 @@ ctx.renderer.setAnimationLoop(() => {
   }
   markers.update(questTarget(quest), car, clock.elapsedTime);
   hud.update(quest, car);
+  sound.update(car, input, quest, isDown('KeyH'), traffic, ctx.camera);
   chase.update(car, dt);
   post.render();
 });
