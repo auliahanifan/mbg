@@ -20,7 +20,7 @@
 - Traffic drives on the **left** (Indonesia).
 - Pure modules (`src/world/cityMap.ts`, `src/vehicle/carPhysics.ts`, `src/vehicle/collision.ts`, `src/quest/quest.ts`, `src/traffic/traffic.ts`, `src/camera/chaseMath.ts`) must **not** import `three`.
 - `pnpm build` = `tsc --noEmit && vite build` and must pass at the end of every task.
-- Models are served from `public/models/<name>.glb` and loaded via `/models/<name>.glb`.
+- Models are served from `public/models/<pack>/<name>.glb` (+ `<pack>/Textures/colormap.png`, pack ∈ roads|commercial|suburban|cars) and loaded via `loadModel(name)`, which resolves the pack from the name prefix.
 - No mkdir of `docs/`; it already exists.
 
 ---
@@ -2075,7 +2075,7 @@ Model 3D dari [Kenney](https://kenney.nl) (CC0) — City Kit Roads/Commercial/Su
 - [ ] **Step 6: Final verification (deploy readiness)**
 
 Run: `pnpm test && pnpm build && pnpm preview`
-Expected: all tests pass; `dist/index.html`, `dist/assets/*.js` and `dist/models/*.glb` exist; http://localhost:4173 plays the full loop (pickup → 3 deliveries → done → R → round 2). Console has no errors. `git status` shows `pnpm-lock.yaml` and `public/models` tracked.
+Expected: all tests pass; `dist/index.html`, `dist/assets/*.js` and `dist/models/<pack>/*.glb` (four pack folders, each with `Textures/colormap.png`) exist; http://localhost:4173 plays the full loop (pickup → 3 deliveries → done → R → round 2). Console has no errors. `git status` shows `pnpm-lock.yaml` and `public/models` tracked.
 
 - [ ] **Step 7: Commit**
 
