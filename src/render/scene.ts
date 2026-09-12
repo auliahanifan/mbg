@@ -17,6 +17,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  renderer.setClearColor(0xcfd8e3);
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0xcfd8e3, 70, 230);

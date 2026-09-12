@@ -12,6 +12,9 @@ export function createChaseCamera(ctx: SceneCtx) {
   const sunOffset = ctx.sunDir.clone().multiplyScalar(SUN_DISTANCE);
   let first = true;
   return {
+    reset() {
+      first = true;
+    },
     update(car: CarState, dt: number) {
       const t = chaseTarget(car);
       pos.set(...t.pos);

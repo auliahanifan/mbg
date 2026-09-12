@@ -21,7 +21,6 @@ const { pois } = await buildCity(ctx.scene);
 const player = await createPlayerCar(ctx.scene);
 const chase = createChaseCamera(ctx);
 const boxes = collisionBoxes(MAP);
-document.getElementById('loading')!.remove();
 
 const start = tileCenter(2, 5);
 const kitchen = pois.find((p) => p.kind === 'kitchen')!;
@@ -33,6 +32,7 @@ const resetCar = () => ({ x: start.x, z: start.z, heading: Math.PI / 2, speed: 0
 let car: CarState = resetCar(); // facing east along the top road
 const traffic = spawnTraffic(MAP, 16, Math.random, { x: start.x, z: start.z, radius: 12 });
 const trafficView = await createTrafficRenderer(ctx.scene, traffic);
+document.getElementById('loading')!.remove();
 
 const clock = new THREE.Clock();
 ctx.renderer.setAnimationLoop(() => {
@@ -47,6 +47,7 @@ ctx.renderer.setAnimationLoop(() => {
   if (consumeKey('KeyR') && (quest.phase === 'done' || quest.phase === 'failed')) {
     quest = createQuest(kitchen, schools, quest.phase === 'done' ? quest.round + 1 : 1);
     car = resetCar();
+    chase.reset();
   }
   markers.update(questTarget(quest), car, clock.elapsedTime);
   hud.update(quest, car);

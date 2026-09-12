@@ -76,7 +76,7 @@ describe('pickRoadModel', () => {
 });
 
 describe('collisionBoxes', () => {
-  it('makes one 8x8 box per non-road tile', () => {
+  it('makes one 9x9 box per non-road tile', () => {
     const boxes = collisionBoxes(small);
     expect(boxes.length).toBe(16 - 3);
     expect(boxes).toContainEqual({ minX: 2 * TILE - BLOCK_HALF, maxX: 2 * TILE + BLOCK_HALF, minZ: 2 * TILE - BLOCK_HALF, maxZ: 2 * TILE + BLOCK_HALF });

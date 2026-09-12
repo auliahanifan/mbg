@@ -4,6 +4,8 @@ Game 3D browser bergaya GTA: kemudikan truk MBG (Makan Bergizi Gratis), ambil pa
 
 ## Jalankan
 
+Butuh Node.js ≥ 20.19 (Vite 8).
+
     pnpm install
     pnpm dev        # http://localhost:5173
     pnpm test       # unit test logika (vitest)

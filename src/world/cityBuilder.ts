@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadModel } from '../assets';
-import { MAP, TILE, tileAt, tileCenter, roadSides, pickRoadModel, findPois, type Poi } from './cityMap';
+import { MAP, TILE, tileCenter, roadSides, pickRoadModel, findPois, type Poi } from './cityMap';
 
 const COMMERCIAL = 'abcdefghijklmn'.split('').map((c) => `building-${c}`);
 const SKYSCRAPERS = 'abcde'.split('').map((c) => `building-skyscraper-${c}`);
@@ -38,7 +38,7 @@ function makeLabel(text: string): THREE.Sprite {
   g.fillText(text, 512, 100);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }));
   s.scale.set(16, 3, 1);
   return s;
 }
