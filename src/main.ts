@@ -51,7 +51,7 @@ const markers = createMarkers(ctx.scene, ground);
 const sound = createSound();
 document.getElementById('loading')!.remove();
 
-const HOURS_PER_SECOND = 0.05; // a full day in 8 real minutes
+const HOURS_PER_SECOND = 1 / 300; // 1 game minute per 5 real seconds: a full day in 2 real hours
 let hour = START_HOUR;
 
 const clock = new THREE.Clock();

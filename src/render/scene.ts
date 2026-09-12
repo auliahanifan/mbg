@@ -11,7 +11,7 @@ export interface SceneCtx {
   setTime: (hour: number) => void;
 }
 
-export const START_HOUR = 7; // the clock starts here and runs from there
+export const START_HOUR = 10; // the clock starts here and runs from there
 const HAZE = 0xb9c4cf; // horizon haze; fog colour, matches the sky at the horizon under tone mapping
 
 export function createScene(canvas: HTMLCanvasElement): SceneCtx {
