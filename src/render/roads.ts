@@ -73,24 +73,24 @@ function merge(parts: Geo[]): THREE.BufferGeometry {
   return geo;
 }
 
-/** Dashed centre line along a polyline, starting/ending `margin` metres from the ends. */
-function dashes(pts: [number, number][], margin: number, y: number): Geo[] {
+/** Dashed centre line along a polyline, starting/ending `margin` metres from the ends. Dashes that would straddle a vertex are skipped. */
+export function dashes(pts: [number, number][], margin: number, y: number): Geo[] {
+  const segs = pts.slice(1).map((b, i) => ({ a: pts[i], b, len: Math.hypot(b[0] - pts[i][0], b[1] - pts[i][1]) }));
+  const total = segs.reduce((s, g) => s + g.len, 0);
   const out: Geo[] = [];
-  let travelled = 0;
-  let nextDash = margin;
-  for (let i = 0; i + 1 < pts.length; i++) {
-    const [ax, az] = pts[i];
-    const [bx, bz] = pts[i + 1];
-    const len = Math.hypot(bx - ax, bz - az);
-    while (nextDash + DASH <= travelled + len) {
-      const t0 = (nextDash - travelled) / len;
-      const t1 = (nextDash + DASH - travelled) / len;
-      out.push(ribbon([[ax + (bx - ax) * t0, az + (bz - az) * t0], [ax + (bx - ax) * t1, az + (bz - az) * t1]], MARK_W, y));
-      nextDash += DASH * 2;
+  let start = 0; // distance along the polyline where the current segment begins
+  let next = margin; // distance where the next dash begins
+  for (const { a, b, len } of segs) {
+    if (next < start) next = start;
+    while (next + DASH <= start + len && next + DASH <= total - margin) {
+      const t0 = (next - start) / len;
+      const t1 = (next + DASH - start) / len;
+      out.push(ribbon([[a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0], [a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1]], MARK_W, y));
+      next += DASH * 2;
     }
-    travelled += len;
+    start += len;
   }
-  return out.filter((_, k) => (k + 1) * DASH * 2 <= travelled - margin + DASH);
+  return out;
 }
 
 export function buildRoads(city: City): THREE.Group {

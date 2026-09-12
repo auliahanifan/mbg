@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ribbon, disc } from './roads';
+import { ribbon, disc, dashes } from './roads';
 
 const xz = (p: number[]) => Array.from({ length: p.length / 3 }, (_, i) => [p[i * 3], p[i * 3 + 2]]);
 
@@ -29,5 +29,19 @@ describe('disc', () => {
     expect(d.positions).toHaveLength(9 * 3);
     expect(d.indices).toHaveLength(8 * 3);
     expect(d.positions.slice(0, 3)).toEqual([5, 0.1, 5]);
+  });
+});
+
+describe('dashes', () => {
+  it('lays 3 m dashes every 6 m, keeping the margin at both ends', () => {
+    const d = dashes([[0, 0], [30, 0]], 6, 0);
+    expect(d).toHaveLength(3); // dashes at 6-9, 12-15, 18-21 (24-27 would end past 30-6)
+    expect(d[0].positions[0]).toBe(6);
+    expect(d[2].positions[6]).toBe(21);
+  });
+  it('continues onto the next segment after a vertex', () => {
+    const d = dashes([[0, 0], [10, 0], [10, 40]], 0, 0);
+    expect(d.length).toBeGreaterThanOrEqual(6);
+    expect(d.some((g) => g.positions[2] > 10)).toBe(true); // some dash lies on the vertical segment (z > 10)
   });
 });
