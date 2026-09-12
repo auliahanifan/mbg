@@ -1,4 +1,4 @@
-import type { CarState } from '../vehicle/carPhysics';
+import { NOS_DURATION, type CarState } from '../vehicle/carPhysics';
 import { questText, questTarget, type Quest } from '../quest/quest';
 import { nearestEdge, type City } from '../world/city';
 import { routeField, pathFrom, type RouteField } from '../world/routing';
@@ -20,6 +20,9 @@ export function createHud(city: City, ground: Ground = FLAT) {
       #speed { bottom: 16px; left: 16px; font-size: 34px; font-weight: 800; }
       #speed span { font-size: 14px; font-weight: 400; margin-left: 4px; }
       #speed small { display: block; font-size: 13px; font-weight: 400; opacity: .85; }
+      #nos { display: block; width: 140px; height: 8px; margin-top: 6px; border-radius: 4px; background: rgba(255,255,255,.18); overflow: hidden; }
+      #nos i { display: block; height: 100%; background: #4dd2ff; }
+      #nos.full i { background: #8ef5ff; box-shadow: 0 0 8px #4dd2ff; }
       #toast { top: 18%; left: 50%; transform: translateX(-50%); font-size: 26px; font-weight: 700; color: #ffe066; transition: opacity .3s; }
       #help { bottom: 16px; right: 16px; font-size: 13px; opacity: .8; }
       #street { bottom: 16px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 600; white-space: nowrap; }
@@ -29,7 +32,7 @@ export function createHud(city: City, ground: Ground = FLAT) {
     <div id="q" class="box"></div>
     <div id="speed" class="box"></div>
     <div id="toast" class="box"></div>
-    <div id="help" class="box">WASD / panah · Spasi rem · H klakson · M bisu · R ulang</div>
+    <div id="help" class="box">WASD / panah · Spasi rem · Shift NOS · H klakson · M bisu · R ulang</div>
     <div id="street" class="box" hidden></div>
     <div id="clock" class="box"></div>
     <canvas id="map" width="${MAP_PX}" height="${MAP_PX}"></canvas>`;
@@ -50,7 +53,8 @@ export function createHud(city: City, ground: Ground = FLAT) {
       clock.textContent = clockText(hour);
       const timer = quest.phase === 'delivering' ? ` · ⏱ ${fmt(quest.timeLeft)}` : '';
       q.innerHTML = `${questText(quest)}<small>Ronde ${quest.round} · Skor ${quest.score}${timer}</small>`;
-      speed.innerHTML = `${Math.round(Math.abs(car.speed) * KMH_PER_UNIT)}<span>km/j</span><small>${Math.round(ground.mdpl(car.x, car.z))} mdpl</small>`;
+      const nos = car.nos ?? NOS_DURATION;
+      speed.innerHTML = `${Math.round(Math.abs(car.speed) * KMH_PER_UNIT)}<span>km/j</span><small>${Math.round(ground.mdpl(car.x, car.z))} mdpl</small><b id="nos" class="${nos >= NOS_DURATION ? 'full' : ''}"><i style="width:${(nos / NOS_DURATION) * 100}%"></i></b>`;
       toast.textContent = quest.toast;
       toast.style.opacity = quest.toastTtl > 0 ? '1' : '0';
 

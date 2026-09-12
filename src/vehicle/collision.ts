@@ -2,10 +2,14 @@ import type { CarState } from './carPhysics';
 
 export interface Box { minX: number; maxX: number; minZ: number; maxZ: number }
 
-export interface Circle { x: number; z: number; r: number }
+export interface Circle { x: number; z: number; r: number; mass?: number } // no mass = immovable (buildings, trees)
 export const CAR_RADIUS = 0.9;
 const SAMPLE_OFFSETS = [1, -1]; // front/back sample circles along heading
-const HIT_SPEED_FACTOR = 0.4;
+const PLAYER_MASS = 1650; // Gran Max box van, kerb plus a load of meal trays
+const REST = 0.25; // restitution: sheet metal folds, so most of the closing speed is eaten, not returned
+
+/** One impact this frame. `index` is the circle hit (-1 for a box); (nx,nz) is the direction the thing hit gets thrown. */
+export interface Hit { index: number; nx: number; nz: number; dv: number; impact: number }
 
 /** Minimal translation that moves circle c out of box b, or null when not overlapping. */
 export function pushOutOfBox(c: Circle, b: Box): { dx: number; dz: number } | null {
@@ -28,6 +32,7 @@ export function pushOutOfBox(c: Circle, b: Box): { dx: number; dz: number } | nu
 }
 
 function pushOutOfCircle(c: Circle, o: Circle): { dx: number; dz: number } | null {
+  if (o.r <= 0) return null; // already wrecked and flying: no longer solid
   const dx = c.x - o.x;
   const dz = c.z - o.z;
   const d = Math.hypot(dx, dz);
@@ -37,27 +42,46 @@ function pushOutOfCircle(c: Circle, o: Circle): { dx: number; dz: number } | nul
   return { dx: (dx / d) * (min - d), dz: (dz / d) * (min - d) };
 }
 
-/** Pushes the car (two sample circles) out of boxes/circles; a hit scales speed down. Pure. */
-export function resolveCar(s: CarState, boxes: Box[], circles: Circle[]): CarState {
+/**
+ * Pushes the car (two sample circles) out of boxes/circles and trades momentum with whatever it hit.
+ * Only the speed driven *into* the contact is lost, shared by mass, so a glancing scrape barely
+ * slows you, a motorbike costs you nothing, and a wall or a truck stops you dead. Pure.
+ */
+export function resolveCar(s: CarState, boxes: Box[], circles: Circle[]): { car: CarState; hits: Hit[] } {
   const fx = Math.sin(s.heading);
   const fz = Math.cos(s.heading);
   let x = s.x;
   let z = s.z;
-  let hit = false;
+  let vx = fx * s.speed;
+  let vz = fz * s.speed;
+  const hits: Hit[] = [];
+  let pushed = false;
+
   for (const off of SAMPLE_OFFSETS) {
     const c: Circle = { x: x + fx * off, z: z + fz * off, r: CAR_RADIUS };
-    const apply = (p: { dx: number; dz: number } | null) => {
+    const apply = (p: { dx: number; dz: number } | null, index: number, mass?: number) => {
       if (!p) return;
+      pushed = true;
       x += p.dx;
       z += p.dz;
       c.x += p.dx;
       c.z += p.dz;
-      hit = true;
+      const d = Math.hypot(p.dx, p.dz);
+      if (d < 1e-9) return;
+      const nx = p.dx / d; // points from the obstacle back towards the car
+      const nz = p.dz / d;
+      const closing = -(vx * nx + vz * nz); // > 0 only when actually driving into it
+      if (closing <= 0) return;
+      const j = closing * (1 + REST);
+      const share = mass === undefined ? 1 : mass / (PLAYER_MASS + mass); // how much of the impulse the car keeps
+      vx += nx * j * share;
+      vz += nz * j * share;
+      hits.push({ index, nx: -nx, nz: -nz, dv: j * (1 - share), impact: closing });
     };
-    for (const b of boxes) {
-      apply(pushOutOfBox(c, b));
-    }
-    for (const o of circles) apply(pushOutOfCircle(c, o));
+    for (const b of boxes) apply(pushOutOfBox(c, b), -1);
+    circles.forEach((o, i) => apply(pushOutOfCircle(c, o), i, o.mass));
   }
-  return hit ? { ...s, x, z, speed: s.speed * HIT_SPEED_FACTOR } : s;
+
+  if (!pushed) return { car: s, hits };
+  return { car: { ...s, x, z, speed: vx * fx + vz * fz }, hits }; // back onto the heading axis: the model only carries scalar speed
 }

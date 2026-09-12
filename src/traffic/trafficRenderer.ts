@@ -27,6 +27,12 @@ export function createTrafficRenderer(scene: THREE.Scene, cars: TrafficCar[], gr
       const k = 1 - Math.exp(-SMOOTH * dt);
       cars.forEach((c, i) => {
         const { m, wheels } = meshes[i];
+        if (c.crash) { // off the road graph: put it exactly where the ballistic step says, no smoothing
+          m.position.set(c.x, ground.y(c.x, c.z) + c.crash.y, c.z);
+          m.rotation.set(0, c.heading, c.crash.roll, 'YXZ');
+          for (const w of wheels) w.rotation.x += c.crash.rollRate * dt;
+          return;
+        }
         const target = new THREE.Vector3(c.x, ground.y(c.x, c.z), c.z);
         if (m.position.distanceTo(target) > 20) m.position.copy(target); // respawn teleport: don't streak across the map
         m.position.lerp(target, k);

@@ -72,6 +72,13 @@ const MIX_TOTAL = MIX.reduce((s, [, w]) => s + w, 0);
 
 export const vehicleSpec = (name: string): CarSpec | BikeSpec => CARS[name] ?? BIKES[name] ?? CARS.avanza;
 
+// Kerb mass in kg from the bounding box. 95 kg/m³ lands within ~10% of the real spec sheet
+// across the whole fleet (BeAT 128, Avanza 1226, Innova 1506, Canter 2503), so no table needed.
+export const vehicleMass = (name: string): number => {
+  const s = vehicleSpec(name);
+  return 95 * s.L * s.W * s.H;
+};
+
 export function pickVehicle(rng: () => number): string {
   let r = rng() * MIX_TOTAL;
   for (const [name, w] of MIX) if ((r -= w) < 0) return name;

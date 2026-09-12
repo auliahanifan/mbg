@@ -18,6 +18,7 @@ export function readCarInput(): CarInput {
     throttle: axis('KeyW', 'ArrowUp') - axis('KeyS', 'ArrowDown'),
     steer: axis('KeyA', 'ArrowLeft') - axis('KeyD', 'ArrowRight'),
     brake: down.has('Space'),
+    nos: down.has('ShiftLeft') || down.has('ShiftRight'),
   };
 }
 

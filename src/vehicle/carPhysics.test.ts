@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stepCar, MAX_SPEED, type CarState } from './carPhysics';
+import { stepCar, MAX_SPEED, NOS_DURATION, NOS_PERIOD, type CarState } from './carPhysics';
 
 const rest: CarState = { x: 0, z: 0, heading: 0, speed: 0 };
 const idle = { throttle: 0, steer: 0, brake: false };
@@ -55,5 +55,15 @@ describe('stepCar', () => {
     expect(coast.speed).toBeLessThan(20);
     expect(braked.speed).toBeCloseTo(0, 1);
     expect(braked.speed).toBeLessThan(coast.speed);
+  });
+  it('NOS doubles top speed, burns out after its charge, and refills every 30 s', () => {
+    const nos = { ...idle, throttle: 1, nos: true };
+    const boosted = run(rest, nos, NOS_DURATION - 0.5);
+    expect(boosted.speed).toBeGreaterThan(MAX_SPEED * 1.5);
+    const spent = run(rest, nos, NOS_DURATION + 1);
+    expect(spent.nos).toBe(0);
+    expect(spent.speed).toBeLessThan(boosted.speed); // charge gone, drag pulls it back to the normal cap
+    expect(run(spent, nos, 1).speed).toBeLessThanOrEqual(MAX_SPEED);
+    expect(run(spent, idle, NOS_PERIOD).nos).toBe(NOS_DURATION);
   });
 });

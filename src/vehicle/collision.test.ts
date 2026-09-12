@@ -25,29 +25,58 @@ describe('pushOutOfBox', () => {
 });
 
 describe('resolveCar', () => {
+  const clear = { x: 20, z: 20, heading: 0, speed: 10 };
+
   it('leaves a clear car untouched', () => {
-    const s = { x: 20, z: 20, heading: 0, speed: 10 };
-    expect(resolveCar(s, [box], [])).toEqual(s);
+    expect(resolveCar(clear, [box], []).car).toEqual(clear);
   });
-  it('pushes the car out of a building and slows it', () => {
-    // facing +x; rear sample sits on the box's east face (x = 8)
+
+  it('stops a car driven head-on into a building', () => {
+    // facing -x, front sample sits on the box's east face (x = 8)
+    const s = { x: 9, z: 4, heading: -Math.PI / 2, speed: 10 };
+    const { car, hits } = resolveCar(s, [box], []);
+    expect(car.x).toBeCloseTo(9 + CAR_RADIUS);
+    expect(car.z).toBeCloseTo(4);
+    expect(car.speed).toBeLessThan(0); // driven forwards into a wall: rebounds backwards
+    expect(Math.abs(car.speed)).toBeLessThan(3);
+    expect(hits[0].index).toBe(-1);
+    expect(hits[0].impact).toBeCloseTo(10);
+  });
+
+  it('costs nothing to scrape past something it is already driving away from', () => {
+    // facing +x with the rear sample overlapping the box: no closing speed, so no impulse
     const s = { x: 9, z: 4, heading: Math.PI / 2, speed: 10 };
-    const r = resolveCar(s, [box], []);
-    expect(r.x).toBeCloseTo(9 + CAR_RADIUS);
-    expect(r.z).toBeCloseTo(4);
-    expect(r.speed).toBeCloseTo(4);
+    const { car, hits } = resolveCar(s, [box], []);
+    expect(car.x).toBeCloseTo(9 + CAR_RADIUS);
+    expect(car.speed).toBeCloseTo(10);
+    expect(hits).toHaveLength(0);
   });
-  it('pushes the car away from another car circle', () => {
-    const s = { x: 0, z: 0, heading: 0, speed: 10 };
-    const r = resolveCar(s, [], [{ x: 0, z: 2, r: 1.4 }]); // front sample at z=1 overlaps
-    expect(r.z).toBeLessThan(0);
-    expect(r.speed).toBeCloseTo(4);
+
+  it('barely slows for a motorbike but throws it hard', () => {
+    const s = { x: 0, z: 0, heading: 0, speed: 30 };
+    const { car, hits } = resolveCar(s, [], [{ x: 0, z: 2, r: 0.55, mass: 128 }]);
+    expect(car.speed).toBeGreaterThan(26); // a 128 kg scooter costs the van almost nothing
+    expect(hits[0].dv).toBeGreaterThan(30); // ...and the scooter goes flying
+    expect(hits[0].nz).toBeCloseTo(1); // thrown forwards, away from the van
   });
+
+  it('is stopped hard by a truck, which barely moves', () => {
+    const s = { x: 0, z: 0, heading: 0, speed: 30 };
+    const { car, hits } = resolveCar(s, [], [{ x: 0, z: 2, r: 1.55, mass: 2503 }]);
+    expect(car.speed).toBeLessThan(10);
+    expect(hits[0].dv).toBeLessThan(20);
+  });
+
+  it('ignores a wreck that is already flying', () => {
+    const s = { x: 0, z: 0, heading: 0, speed: 30 };
+    expect(resolveCar(s, [], [{ x: 0, z: 1, r: 0, mass: 128 }]).hits).toHaveLength(0);
+  });
+
   it('collides with a boundary wall box far from the origin', () => {
     const s = { x: 500, z: 11, heading: 0, speed: 5 };
     const wall = { minX: -1750, maxX: 1750, minZ: 12, maxZ: 62 };
-    const r = resolveCar(s, [wall], []);
-    expect(r.z).toBeLessThan(12);
-    expect(r.speed).toBeLessThan(5);
+    const { car } = resolveCar(s, [wall], []);
+    expect(car.z).toBeLessThan(12);
+    expect(car.speed).toBeLessThan(5);
   });
 });

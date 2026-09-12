@@ -19,7 +19,7 @@ import { createChaseCamera } from './camera/chaseCamera';
 import { createQuest, stepQuest, questTarget, questPois, type Quest } from './quest/quest';
 import { createHud } from './ui/hud';
 import { createMarkers } from './quest/markers';
-import { spawnTraffic, stepTraffic, trafficCircles } from './traffic/traffic';
+import { spawnTraffic, stepTraffic, trafficCircles, launch } from './traffic/traffic';
 import { createTrafficRenderer } from './traffic/trafficRenderer';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -62,8 +62,9 @@ ctx.renderer.setAnimationLoop(() => {
   const input = readCarInput();
   car = stepCar(car, input, dt, GRAVITY * grade(ground, car.x, car.z, car.heading));
   stepTraffic(city, traffic, [car], dt, Math.random, car);
-  const resolved = resolveCar(car, boxesAround(occupancy, car.x, car.z), trafficCircles(traffic));
-  if (resolved !== car) sound.hit(Math.abs(car.speed));
+  const { car: resolved, hits } = resolveCar(car, boxesAround(occupancy, car.x, car.z), trafficCircles(traffic));
+  for (const h of hits) if (h.index >= 0) launch(traffic[h.index], h.nx, h.nz, h.dv);
+  if (hits.length) sound.hit(Math.max(...hits.map((h) => h.impact)));
   car = resolved;
   trafficView.update(dt);
   player.sync(car, input, dt, ground);
