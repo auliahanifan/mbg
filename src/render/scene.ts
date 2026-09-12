@@ -22,7 +22,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0xcfd8e3, 70, 230);
 
-  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600);
+  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1500);
   camera.position.set(0, 6, -12);
 
   const sunDir = new THREE.Vector3(0.4, 0.55, 0.3).normalize();
