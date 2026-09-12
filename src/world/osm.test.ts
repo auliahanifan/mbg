@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CENTER, project, bbox, widthOf, area, orientedBox, classify, propagateNames, buildCityData, areaKind, lineKind, pointInRing, scatter, type OsmElement } from './osm';
+import { CENTER, project, bbox, widthOf, area, orientedBox, classify, propagateNames, buildCityData, areaKind, lineKind, pointInRing, scatter, clearRoads, type OsmElement } from './osm';
 
 describe('project', () => {
   it('maps the centre to the origin, north to -z, east to +x', () => {
@@ -160,5 +160,55 @@ describe('terrain classification', () => {
     for (const [x, z] of pts) expect(pointInRing(x, z, ring)).toBe(true);
     expect(pointInRing(150, 50, ring)).toBe(false);
     expect(scatter(ring, 10)).toEqual(pts); // deterministic
+  });
+});
+
+describe('clearRoads', () => {
+  const data = (nodes: [number, number][], p: [number, number][]) =>
+    ({ nodes, ways: [{ n: nodes.map((_, i) => i), w: 6 }], buildings: [{ p, h: 3 }], pois: [] });
+  const STRAIGHT: [number, number][] = [[-50, 0], [50, 0]];
+  const BENT: [number, number][] = [[-50, -20], [0, 0], [50, -20]]; // apex reaches up to the facade below
+  /** Closest approach of any wall of `ring` to the road polyline, sampled every 0.25 m. */
+  const clearance = (ring: [number, number][], road: [number, number][]) => {
+    let best = Infinity;
+    for (let i = 0; i < ring.length; i++) {
+      const [ax, az] = ring[i];
+      const [bx, bz] = ring[(i + 1) % ring.length];
+      const steps = Math.ceil(Math.hypot(bx - ax, bz - az) * 4);
+      for (let k = 0; k <= steps; k++) {
+        const x = ax + ((bx - ax) * k) / steps;
+        const z = az + ((bz - az) * k) / steps;
+        for (let j = 0; j + 1 < road.length; j++) {
+          const [cx, cz] = road[j];
+          const dx = road[j + 1][0] - cx;
+          const dz = road[j + 1][1] - cz;
+          const t = Math.max(0, Math.min(1, ((x - cx) * dx + (z - cz) * dz) / (dx * dx + dz * dz)));
+          best = Math.min(best, Math.hypot(cx + dx * t - x, cz + dz * t - z));
+        }
+      }
+    }
+    return best;
+  };
+
+  it('pushes a footprint overlapping the road back past the kerb', () => {
+    const [b] = clearRoads(data(STRAIGHT, [[0, 2], [10, 2], [10, 12], [0, 12]]));
+    expect(b.p).toEqual([[0, 3.9], [10, 3.9], [10, 12], [0, 12]]); // front wall out past the 3.8 m corridor, nothing sideways
+  });
+
+  it('leaves a footprint clear of the road untouched', () => {
+    const p: [number, number][] = [[0, 5], [10, 5], [10, 15], [0, 15]];
+    expect(clearRoads(data(STRAIGHT, p))[0].p).toEqual(p);
+  });
+
+  it('bends a long facade that only dips into the road mid-wall', () => {
+    const p: [number, number][] = [[-40, 2.5], [40, 2.5], [40, 20], [-40, 20]]; // corners clear, middle inside the apex corridor
+    expect(clearance(p, BENT)).toBeLessThan(3);
+    const [b] = clearRoads(data(BENT, p));
+    expect(b.p.length).toBeGreaterThan(4); // the dipping wall got subdivided
+    expect(clearance(b.p, BENT)).toBeGreaterThan(3); // and now clears the asphalt
+  });
+
+  it('drops a footprint the road runs straight through', () => {
+    expect(clearRoads(data(STRAIGHT, [[0, -20], [6, -20], [6, 20], [0, 20]]))).toEqual([]);
   });
 });

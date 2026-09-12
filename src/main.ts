@@ -7,7 +7,7 @@ import { buildLandmarks } from './render/landmarks';
 import { buildTerrain, buildGround } from './render/terrain';
 import { makeGround, grade, GRAVITY, type Dem } from './world/terrain';
 import { loadCity, nearestEdge, pointOnEdge } from './world/city';
-import { project, SPAWN, type CityData } from './world/osm';
+import { clearRoads, project, SPAWN, type CityData } from './world/osm';
 import { routeLength } from './world/routing';
 import { rasterize, boxesAround } from './vehicle/occupancy';
 import { stepCar, type CarState } from './vehicle/carPhysics';
@@ -27,6 +27,7 @@ const ctx = createScene(canvas);
 const post = createPost(ctx);
 const [data, dem]: [CityData, Dem] = await Promise.all([fetch('/purwokerto.json').then((r) => r.json()), fetch('/dem.json').then((r) => r.json())]);
 const city = loadCity(data);
+data.buildings = clearRoads(data); // footprints off the asphalt, before anything renders or collides with them
 const ground = makeGround(dem);
 ctx.scene.add(buildGround(ground, data.areas ?? []), buildTerrain(data, ground), buildRoads(city, ground), buildBuildings(data.buildings, ground), buildLandmarks(data.pois, ground));
 const occupancy = rasterize(data.buildings, data.trees);

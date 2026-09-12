@@ -276,3 +276,106 @@ export function buildCityData(elements: OsmElement[]): CityData {
   });
   return { nodes, ways, buildings, pois, areas, lines, trees };
 }
+
+const ROAD_MARGIN = 0.8; // clearance beyond the asphalt edge; covers the 0.6 m roof overhang
+const CELL = 10; // grid cell; must exceed the widest corridor half-width (12/2 + margin) for the one-cell lookup below
+
+/** Displacement that pushes a point out of every road corridor it is deeper than `tol` inside, or null if it is clear. */
+function corridorEscape(data: CityData) {
+  const segs: [number, number, number, number, number][] = []; // ax, az, bx, bz, half width
+  const grid = new Map<number, number[]>();
+  const key = (i: number, j: number) => i * 8192 + j;
+  for (const w of data.ways) {
+    for (let i = 0; i + 1 < w.n.length; i++) {
+      const [ax, az] = data.nodes[w.n[i]];
+      const [bx, bz] = data.nodes[w.n[i + 1]];
+      if (Math.hypot(bx - ax, bz - az) < 0.01) continue;
+      const s = segs.push([ax, az, bx, bz, w.w / 2 + ROAD_MARGIN]) - 1;
+      // bucketed one cell beyond the segment's bounds, so a query only ever reads the cell it lands in
+      for (let i2 = Math.floor(Math.min(ax, bx) / CELL) - 1; i2 <= Math.floor(Math.max(ax, bx) / CELL) + 1; i2++) {
+        for (let j = Math.floor(Math.min(az, bz) / CELL) - 1; j <= Math.floor(Math.max(az, bz) / CELL) + 1; j++) {
+          const cell = grid.get(key(i2, j));
+          if (cell) cell.push(s); else grid.set(key(i2, j), [s]);
+        }
+      }
+    }
+  }
+  return (x: number, z: number, tol = 0): [number, number] | null => {
+    let ex = 0;
+    let ez = 0;
+    let inside = false;
+    for (const s of grid.get(key(Math.floor(x / CELL), Math.floor(z / CELL))) ?? []) {
+      const [ax, az, bx, bz, hw] = segs[s];
+      const dx = bx - ax;
+      const dz = bz - az;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+      const ox = x - (ax + dx * t);
+      const oz = z - (az + dz * t);
+      const dist = Math.hypot(ox, oz);
+      const depth = hw - dist;
+      if (depth <= tol) continue;
+      inside = true;
+      // sum the escapes so a corner inside two corridors leaves both at once instead of ping-ponging
+      if (dist) { ex += (ox / dist) * depth; ez += (oz / dist) * depth; }
+      else { const l = Math.hypot(dx, dz); ex += (-dz / l) * depth; ez += (dx / l) * depth; } // dead centre: sideways
+    }
+    return inside ? [ex, ez] : null;
+  };
+}
+
+/**
+ * Keeps buildings off the road: every footprint vertex inside a road corridor is pushed out past its edge,
+ * and the ~2 % of footprints whose walls still cross one (they sit on a junction, or a road runs through them) are dropped.
+ */
+export function clearRoads(data: CityData): CityData['buildings'] {
+  const escape = corridorEscape(data);
+  const push = (p: [number, number]): [number, number] => {
+    let [x, z] = p;
+    for (let k = 0; k < 6; k++) {
+      const e = escape(x, z);
+      if (!e) break;
+      x = round1(x + e[0] * 1.05); // overshoot so the 0.1 m rounding cannot land back inside
+      z = round1(z + e[1] * 1.05);
+    }
+    return [x, z];
+  };
+  const clearWall = (a: [number, number], b: [number, number]) => {
+    const steps = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1])); // ~1 m samples
+    for (let i = 0; i <= steps; i++) if (escape(a[0] + ((b[0] - a[0]) * i) / steps, a[1] + ((b[1] - a[1]) * i) / steps, 0.2)) return false;
+    return true;
+  };
+  // A wall between two cleared vertices can still run through a corridor (a long facade along a road at a slight
+  // angle): subdivide just those walls at 2 m and push the samples out too, bending the facade along the kerb.
+  const repair = (ring: [number, number][]): [number, number][] => {
+    const out: [number, number][] = [];
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % ring.length];
+      out.push(a);
+      if (clearWall(a, b)) continue;
+      const steps = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 2);
+      for (let k = 1; k < steps; k++) out.push(push([a[0] + ((b[0] - a[0]) * k) / steps, a[1] + ((b[1] - a[1]) * k) / steps]));
+    }
+    return out.filter((p, i) => p[0] !== out[(i + 1) % out.length][0] || p[1] !== out[(i + 1) % out.length][1]);
+  };
+  const clearRing = (ring: [number, number][]) => ring.every((p, i) => clearWall(p, ring[(i + 1) % ring.length]));
+  const side = (a: [number, number], b: [number, number], c: [number, number]) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+  /** No two non-adjacent walls cross: pushing vertices can fold a footprint over itself, and a bow-tie renders as garbage. */
+  const simple = (ring: [number, number][]) => {
+    for (let i = 0; i < ring.length; i++) {
+      for (let j = i + 2; j < ring.length; j++) {
+        if (i === 0 && j === ring.length - 1) continue;
+        const [a, b, c, d] = [ring[i], ring[i + 1], ring[j], ring[(j + 1) % ring.length]];
+        if (side(c, d, a) * side(c, d, b) < 0 && side(a, b, c) * side(a, b, d) < 0) return false;
+      }
+    }
+    return true;
+  };
+  const out: CityData['buildings'] = [];
+  for (const b of data.buildings) {
+    let p = b.p.map(push);
+    if (!clearRing(p)) p = repair(p);
+    if (p.length >= 3 && clearRing(p) && simple(p)) out.push({ ...b, p });
+  }
+  return out;
+}
