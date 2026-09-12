@@ -15,7 +15,7 @@
 - Package manager: **pnpm** (lockfile `pnpm-lock.yaml` must be committed; Vercel detects it).
 - Language for all in-game copy: **Indonesian**.
 - Coordinate convention: y up. **Heading 0 = facing +z**, forward vector = `(sin(heading), 0, cos(heading))`. Positive steer turns **left** (heading increases). Kenney car models face +z natively, so `mesh.rotation.y = heading` needs no offset.
-- Compass: N = −z, E = +x, S = +z, W = −x. Tile `(row, col)` center = `(x: col*8, z: row*8)`.
+- Compass: N = −z, E = +x, S = +z, W = −x. Tile `(row, col)` center = `(x: col*TILE, z: row*TILE)` with **TILE = 12** (amended during execution from 8; buildings stay at scale 8 so streets are wide).
 - One quarter turn of `Object3D.rotation.y` (+π/2) maps E→N→W→S→E.
 - Traffic drives on the **left** (Indonesia).
 - Pure modules (`src/world/cityMap.ts`, `src/vehicle/carPhysics.ts`, `src/vehicle/collision.ts`, `src/quest/quest.ts`, `src/traffic/traffic.ts`, `src/camera/chaseMath.ts`) must **not** import `three`.
@@ -1744,7 +1744,7 @@ git commit -m "feat: quest markers (ring, beam, arrow) and minimap"
 - Consumes: `Dir, DIR_VEC, TILE, roadSides, roadTiles, tileCenter, opposite, leftOf, headingOf` (Task 3); `Circle` (Task 6); `loadModel` (Task 2).
 - Produces:
   - `interface TrafficCar { row; col; dir: Dir; t: number; speed: number; model: string; x; z; heading; stuck: number }`
-  - `TRAFFIC_SPEED = 7`, `LANE_OFFSET = 1.6`, `TRAFFIC_RADIUS = 1.4`
+  - `TRAFFIC_SPEED = 7`, `LANE_OFFSET = 2.4`, `TRAFFIC_RADIUS = 1.4`
   - `spawnTraffic(map, count, rng, avoid: {x,z,radius}): TrafficCar[]`
   - `stepTraffic(cars, obstacles: {x,z}[], dt, rng, map): void` (mutates cars; `obstacles` = player position; cars also avoid each other)
   - `trafficCircles(cars): Circle[]`
@@ -1808,7 +1808,7 @@ describe('traffic', () => {
     expect(ahead.speed).toBeLessThan(TRAFFIC_SPEED);
     const free = car({ dir: 'E', t: 0 });
     stepTraffic([free], [], 0, rng0, ring);
-    stepTraffic([free], [{ x: free.x + 4, z: free.z + 3.2 }], 0.5, rng0, ring); // opposite lane
+    stepTraffic([free], [{ x: free.x + 4, z: free.z + 2 * LANE_OFFSET }], 0.5, rng0, ring); // opposite lane
     expect(free.speed).toBe(TRAFFIC_SPEED);
   });
   it('gives up waiting after 3 seconds', () => {
@@ -1838,7 +1838,7 @@ import { DIR_VEC, TILE, roadSides, roadTiles, tileCenter, opposite, leftOf, head
 import type { Circle } from '../vehicle/collision';
 
 export const TRAFFIC_SPEED = 7;
-export const LANE_OFFSET = 1.6; // left-hand traffic (Indonesia)
+export const LANE_OFFSET = 2.4; // left-hand traffic (Indonesia); lane centre of a 9.6-wide road
 export const TRAFFIC_RADIUS = 1.4;
 const MODELS = ['sedan', 'suv', 'taxi', 'van', 'hatchback-sports', 'truck'];
 const LOOK_AHEAD = 7;

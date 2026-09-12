@@ -16,7 +16,7 @@ Game browser 3D bergaya GTA (third-person chase cam) di mana pemain mengemudikan
 
 ## World
 
-- Grid 17×17 tile, 1 tile = 8 unit dunia. Peta didefinisikan sebagai array string (`MAP`) di `src/world/cityMap.ts`.
+- Grid 17×17 tile, 1 tile = 12 unit dunia (jalan 9.6 lebar; gedung skala 8 dengan trotoar/setback — diubah dari 8 saat eksekusi agar jalan terasa lebar seperti GTA). Peta didefinisikan sebagai array string (`MAP`) di `src/world/cityMap.ts`.
 - Tile: `R` jalan, `.` gedung komersial, `X` pencakar langit (ring luar), `H` rumah, `T` taman, `K` Dapur SPPG, `1`/`2`/`3` SD.
 - Model tile jalan dipilih otomatis dari bitmask tetangga (straight/bend/T/crossroad/end) + rotasi.
 - Lalu lintas kiri (Indonesia): mobil traffic berjalan di lajur kiri.
