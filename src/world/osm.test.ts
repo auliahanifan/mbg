@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CENTER, project, bbox, widthOf, heightOf, buildCityData, type OsmElement } from './osm';
+import { CENTER, project, bbox, widthOf, area, orientedBox, classify, buildCityData, type OsmElement } from './osm';
 
 describe('project', () => {
   it('maps the centre to the origin, north to -z, east to +x', () => {
@@ -15,7 +15,7 @@ describe('project', () => {
   });
 });
 
-describe('widthOf / heightOf', () => {
+describe('widthOf', () => {
   it('classifies highways and skips footways', () => {
     expect(widthOf('primary')).toBe(12);
     expect(widthOf('primary_link')).toBe(12);
@@ -25,15 +25,61 @@ describe('widthOf / heightOf', () => {
     expect(widthOf('footway')).toBeNull();
     expect(widthOf('steps')).toBeNull();
   });
-  it('uses building:levels, tall tags, else 1-3 floors', () => {
-    expect(heightOf({ 'building:levels': '4' }, 0, 0)).toBeCloseTo(12.8);
-    const tall = heightOf({ building: 'hotel' }, 5, 5);
-    expect(tall).toBeGreaterThanOrEqual(16);
-    expect(tall).toBeLessThanOrEqual(25.6);
-    const low = heightOf({ building: 'yes' }, 5, 5);
-    expect(low).toBeGreaterThanOrEqual(3.2);
-    expect(low).toBeLessThanOrEqual(9.6);
-    expect(heightOf({ building: 'yes' }, 5, 5)).toBe(low); // deterministic
+});
+
+const SQ: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]]; // 100 m² house
+const BIG: [number, number][] = [[0, 0], [30, 0], [30, 30], [0, 30]]; // 900 m², short side 30 > 18
+const HOUSE_BIG: [number, number][] = [[0, 0], [25, 0], [25, 16], [0, 16]]; // 400 m² but still roofable (short 16)
+const L: [number, number][] = [[0, 0], [20, 0], [20, 4], [4, 4], [4, 20], [0, 20]]; // 144 m² in a 400 m² box → fill 0.36
+
+describe('area / orientedBox', () => {
+  it('area is orientation independent', () => {
+    expect(area(SQ)).toBe(100);
+    expect(area([...SQ].reverse())).toBe(100);
+    expect(area(L)).toBe(144);
+  });
+  it('finds the rotated minimum box', () => {
+    const b = orientedBox([[0, 0], [10, 10], [5, 15], [-5, 5]]); // 14.14 × 7.07 rectangle at 45°
+    expect(b.long).toBeCloseTo(Math.sqrt(200), 3);
+    expect(b.short).toBeCloseTo(Math.sqrt(50), 3);
+    expect(b.cx).toBeCloseTo(2.5, 3);
+    expect(b.cz).toBeCloseTo(7.5, 3);
+    expect(Math.abs(b.ux)).toBeCloseTo(Math.SQRT1_2, 3);
+    expect(Math.abs(b.uz)).toBeCloseTo(Math.SQRT1_2, 3);
+  });
+});
+
+describe('classify', () => {
+  it('explicit levels/height win', () => {
+    expect(classify({ building: 'yes', 'building:levels': '4' }, BIG)).toEqual({ h: 12.8 });
+    expect(classify({ building: 'yes', height: '15' }, BIG)).toEqual({ h: 15 });
+    expect(classify({ building: 'yes', 'building:levels': '2' }, SQ)).toEqual({ h: 6.4, r: 'hip' }); // a 2-storey house keeps its roof
+  });
+  it('small plain footprints are 1-2 storey hip-roofed houses', () => {
+    const c = classify({ building: 'yes' }, SQ);
+    expect([3.2, 6.4]).toContain(c.h);
+    expect(c.r).toBe('hip');
+    expect(classify({ building: 'yes' }, HOUSE_BIG).r).toBeUndefined(); // 400 m² plain box: not a house
+    expect(classify({ building: 'house' }, HOUSE_BIG).r).toBe('hip'); // explicit house tag ignores the area cap
+    expect(classify({ building: 'yes' }, SQ)).toEqual(c); // deterministic
+  });
+  it('L-shapes and big plain boxes get flat roofs', () => {
+    expect(classify({ building: 'yes' }, L).r).toBeUndefined();
+    const big = classify({ building: 'yes' }, BIG);
+    expect([3.2, 6.4]).toContain(big.h);
+    expect(big.r).toBeUndefined();
+  });
+  it('shops are 2-3 storey ruko, hotels 6-9, mosques domed', () => {
+    const ruko = classify({ building: 'yes', shop: 'bakery' }, SQ);
+    expect([6.4, 9.6]).toContain(ruko.h);
+    expect(ruko.r).toBeUndefined();
+    const hotel = classify({ building: 'yes', tourism: 'hotel' }, BIG);
+    expect(hotel.h).toBeGreaterThanOrEqual(19.2);
+    expect(hotel.h).toBeLessThanOrEqual(28.8);
+    expect(classify({ building: 'mosque' }, SQ)).toEqual({ h: 4.8, r: 'dome' });
+    expect(classify({ building: 'yes', amenity: 'place_of_worship' }, SQ).r).toBe('dome');
+    expect(classify({ building: 'yes', amenity: 'place_of_worship', religion: 'christian' }, SQ).r).toBeUndefined();
+    expect(classify({ building: 'yes', name: 'Mushola Darul Hikmah' }, SQ).r).toBe('dome');
   });
 });
 
@@ -61,10 +107,11 @@ describe('buildCityData', () => {
     expect(data.nodes[0]).toEqual([0, 0]);
     expect(data.nodes[1][0]).toBeCloseTo(110.4, 0);
   });
-  it('emits closed buildings without the repeated last point', () => {
+  it('emits closed buildings without the repeated last point, classified', () => {
     expect(data.buildings).toHaveLength(1);
     expect(data.buildings[0].p).toHaveLength(3);
     expect(data.buildings[0].h).toBeGreaterThan(0);
+    expect(data.buildings[0].r).toBeUndefined(); // 6105 m² triangle: not a house → flat
   });
   it('projects the hardcoded POIs', () => {
     expect(data.pois.map((p) => p.id)).toEqual(['K', '1', '2', '3', 'A', 'M', 'S', 'G']);

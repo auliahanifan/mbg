@@ -21,10 +21,11 @@ export const bbox = () => ({
 });
 
 export interface CityPoi { id: string; name: string; kind: 'kitchen' | 'school' | 'landmark'; x: number; z: number }
+export type Roof = 'hip' | 'dome';
 export interface CityData {
   nodes: [number, number][];
   ways: { n: number[]; w: number; name?: string }[];
-  buildings: { p: [number, number][]; h: number }[];
+  buildings: { p: [number, number][]; h: number; r?: Roof }[];
   pois: CityPoi[];
 }
 
@@ -52,13 +53,83 @@ export function widthOf(highway: string): number | null {
   return WIDTHS[highway.replace(/_link$/, '')] ?? 6;
 }
 
-const TALL = new Set(['commercial', 'retail', 'hotel', 'office', 'mall']);
-const hash = (x: number, z: number) => ((Math.round(x * 10) * 73856093) ^ (Math.round(z * 10) * 19349663)) >>> 0;
-export function heightOf(tags: Record<string, string>, x: number, z: number): number {
+export const hash = (x: number, z: number) => ((Math.round(x * 10) * 73856093) ^ (Math.round(z * 10) * 19349663)) >>> 0;
+
+/** Shoelace area of a ring (either winding). */
+export function area(ring: [number, number][]): number {
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, z1] = ring[i];
+    const [x2, z2] = ring[(i + 1) % ring.length];
+    a += x1 * z2 - x2 * z1;
+  }
+  return Math.abs(a) / 2;
+}
+
+export interface OrientedBox { cx: number; cz: number; ux: number; uz: number; long: number; short: number }
+
+/** Minimum-area bounding rectangle among the ring's edge directions; (ux, uz) is the unit long axis. */
+export function orientedBox(ring: [number, number][]): OrientedBox {
+  let best: OrientedBox | null = null;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, z1] = ring[i];
+    const [x2, z2] = ring[(i + 1) % ring.length];
+    const l = Math.hypot(x2 - x1, z2 - z1);
+    if (l < 1e-6) continue;
+    const ux = (x2 - x1) / l;
+    const uz = (z2 - z1) / l;
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+    for (const [x, z] of ring) {
+      const u = x * ux + z * uz;
+      const v = -x * uz + z * ux;
+      minU = Math.min(minU, u); maxU = Math.max(maxU, u);
+      minV = Math.min(minV, v); maxV = Math.max(maxV, v);
+    }
+    const du = maxU - minU;
+    const dv = maxV - minV;
+    if (best && du * dv >= best.long * best.short) continue;
+    const mu = (minU + maxU) / 2;
+    const mv = (minV + maxV) / 2;
+    const cx = ux * mu - uz * mv; // inverse rotation of (mu, mv)
+    const cz = uz * mu + ux * mv;
+    best = du >= dv ? { cx, cz, ux, uz, long: du, short: dv } : { cx, cz, ux: -uz, uz: ux, long: dv, short: du };
+  }
+  return best ?? { cx: ring[0][0], cz: ring[0][1], ux: 1, uz: 0, long: 0, short: 0 };
+}
+
+const HOUSE = new Set(['yes', 'house', 'residential', 'detached', 'terrace', 'bungalow']);
+const RUKO = new Set(['commercial', 'retail', 'office', 'apartments']);
+const CIVIC = /^(school|kindergarten|college|university|public|government|industrial|warehouse|train_station|railway|garage|garages|parking|roof|church|chapel)$/;
+const isMosque = (t: Record<string, string>) =>
+  t.building === 'mosque' || t.religion === 'muslim' || (t.amenity === 'place_of_worship' && !t.religion) || /masjid|musholl?a/i.test(t.name ?? '');
+
+/**
+ * Height + roof kind from tags and footprint. Explicit height/levels win. Otherwise Purwokerto defaults:
+ * small plain footprints are 1–2 storey hip-roofed houses, tagged shops/offices 2–3 storey flat ruko,
+ * hotels 6–9, mall/hospital 3–4, civic 1–2, mosques 4.8 m with a dome.
+ */
+export function classify(tags: Record<string, string>, ring: [number, number][]): { h: number; r?: Roof } {
+  const rnd = hash(ring[0][0], ring[0][1]) % 100;
   const levels = parseInt(tags['building:levels'] ?? '', 10);
-  if (levels > 0) return levels * FLOOR;
-  const h = hash(x, z);
-  return round1((TALL.has(tags.building) ? 5 + (h % 4) : 1 + (h % 3)) * FLOOR);
+  const height = parseFloat(tags.height ?? '');
+  const explicit = height > 0 ? height : levels > 0 ? levels * FLOOR : 0;
+  if (isMosque(tags)) return { h: round1(explicit || FLOOR * 1.5), r: 'dome' };
+  const a = area(ring);
+  const b = tags.building;
+  const tagged = !!(tags.shop || tags.amenity || tags.tourism || tags.office);
+  if (HOUSE.has(b) && !tagged && (b !== 'yes' || a <= 300)) {
+    const h = round1(explicit || FLOOR * (rnd < 78 ? 1 : 2));
+    const box = orientedBox(ring);
+    const hip = ring.length <= 8 && box.short <= 18 && a >= 0.7 * box.long * box.short;
+    return hip ? { h, r: 'hip' } : { h };
+  }
+  let floors: number;
+  if (tags.tourism === 'hotel') floors = 6 + (rnd % 4);
+  else if (tags.shop === 'mall' || b === 'hospital' || tags.amenity === 'hospital') floors = 3 + (rnd % 2);
+  else if (CIVIC.test(b) || /school|kindergarten|college|university/.test(tags.amenity ?? '')) floors = 1 + (rnd % 2);
+  else if (tagged || RUKO.has(b)) floors = 2 + (rnd % 2);
+  else floors = 1 + (rnd % 2);
+  return { h: round1(explicit || floors * FLOOR) };
 }
 
 export function buildCityData(elements: OsmElement[]): CityData {
@@ -90,7 +161,7 @@ export function buildCityData(elements: OsmElement[]): CityData {
       const closed = e.nodes.length >= 4 && e.nodes[0] === e.nodes[e.nodes.length - 1];
       if (!closed) continue;
       const p = e.nodes.slice(0, -1).map((id) => project(...latLon.get(id)!));
-      buildings.push({ p, h: heightOf(e.tags, p[0][0], p[0][1]) });
+      buildings.push({ p, ...classify(e.tags, p) });
     }
   }
   const pois = POIS.map(({ lat, lon, ...rest }) => {
