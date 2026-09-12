@@ -43,10 +43,11 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   u.cloudDensity.value = 0.55;
   u.cloudElevation.value = 0.35;
   sky.onBeforeRender = () => { u.time.value = performance.now() / 1000; }; // clouds drift
-  // the sun disc is ~1e5 linear: dim the sky to sit under the tone-mapper's shoulder, then cap it —
-  // 2.0 is just above the brightest clear sky, so only the disc and its aureole are clipped and
-  // driving into the sun no longer whites out the road (and the half-float post chain never sees inf)
-  sky.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( min( texColor * 0.45, vec3( 2.0 ) ), 1.0 );'); };
+  // the sun disc is ~1e5 linear: dim the sky to sit under the tone-mapper's shoulder, then cap it.
+  // 2.2 is just above the brightest clear sky, so only the disc and the aureole around it clip —
+  // driving into the low sun no longer whites out the road, and the half-float post chain never sees inf.
+  // post.ts keeps the bloom threshold above this cap, so the sky can never bleed over the road.
+  sky.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( min( texColor * 0.45, vec3( 2.2 ) ), 1.0 );'); };
   scene.add(sky);
 
   // sky-coloured env map (LDR equirect gradient: zenith blue → horizon haze → ground) lights the world and gives car paint its reflections
