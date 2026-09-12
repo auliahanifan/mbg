@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadModel } from '../assets';
-import type { TrafficCar } from './traffic';
+type TrafficCar = { x: number; z: number; heading: number; speed: number; model: string };
 
 const WHEEL_RADIUS = 0.3;
 const SMOOTH = 10; // visual lerp hides the lane-offset jump when a car turns a corner

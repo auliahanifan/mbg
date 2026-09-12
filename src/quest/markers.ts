@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Poi } from '../world/cityMap';
+import type { Poi } from './quest';
 import type { CarState } from '../vehicle/carPhysics';
 import { STOP_RADIUS } from './quest';
 

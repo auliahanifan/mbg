@@ -21,6 +21,6 @@ Alternatif CLI: `npx vercel --prod`.
 
 ## Aset
 
-Model 3D dari [Kenney](https://kenney.nl) (CC0) — City Kit Roads/Commercial/Suburban, Car Kit. Ambil ulang dengan `scripts/fetch-assets.sh`.
+Model mobil dari [Kenney](https://kenney.nl) Car Kit (CC0). Ambil ulang dengan `scripts/fetch-assets.sh`.
 Logo Badan Gizi Nasional (`public/logo-bgn.png`) diambil dari [bgn.go.id](https://www.bgn.go.id) — lambang instansi pemerintah, dipakai hanya sebagai livery mobil SPPG dalam game.
 Data jalan & gedung Purwokerto (`public/purwokerto.json`) © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, lisensi ODbL. Perbarui dengan `node scripts/fetch-osm.mjs`.

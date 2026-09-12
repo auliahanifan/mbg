@@ -22,7 +22,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0xcfd8e3, 70, 230);
 
-  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1500);
+  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 5000);
   camera.position.set(0, 6, -12);
 
   const sunDir = new THREE.Vector3(0.4, 0.55, 0.3).normalize();
@@ -54,7 +54,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   scene.add(sun, sun.target);
 
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(2000, 2000),
+    new THREE.PlaneGeometry(8000, 8000),
     new THREE.MeshStandardMaterial({ color: 0x5e7a3c, roughness: 1 }),
   );
   ground.rotation.x = -Math.PI / 2;

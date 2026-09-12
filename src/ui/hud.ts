@@ -1,10 +1,13 @@
 import type { CarState } from '../vehicle/carPhysics';
 import { questText, questTarget, type Quest } from '../quest/quest';
-import { MAP, TILE, roadTiles } from '../world/cityMap';
+import { nearestNode, type City } from '../world/city';
+import { routeField, pathFrom, type RouteField } from '../world/routing';
 
-const KMH_PER_UNIT = 4;
+const KMH_PER_UNIT = 3.6; // 1 unit = 1 m
+const MAP_PX = 200;
+const MAP_M = 400; // window width in metres
 
-export function createHud() {
+export function createHud(city: City) {
   const root = document.getElementById('hud')!;
   root.innerHTML = `
     <style>
@@ -21,21 +24,16 @@ export function createHud() {
     <div id="speed" class="box"></div>
     <div id="toast" class="box"></div>
     <div id="help" class="box">WASD / panah · Spasi rem · R ulang</div>
-    <canvas id="map" width="200" height="200"></canvas>`;
+    <canvas id="map" width="${MAP_PX}" height="${MAP_PX}"></canvas>`;
   const q = root.querySelector<HTMLElement>('#q')!;
   const speed = root.querySelector<HTMLElement>('#speed')!;
   const toast = root.querySelector<HTMLElement>('#toast')!;
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  const map = root.querySelector<HTMLCanvasElement>('#map')!;
-  const mg = map.getContext('2d')!;
-  const SCALE = map.width / (MAP.length * TILE); // world units -> px
-  const toPx = (v: number) => (v + TILE / 2) * SCALE;
-  const bg = document.createElement('canvas');
-  bg.width = map.width;
-  bg.height = map.height;
-  const bgCtx = bg.getContext('2d')!;
-  bgCtx.fillStyle = '#9aa5a0';
-  for (const { row, col } of roadTiles(MAP)) bgCtx.fillRect(col * TILE * SCALE, row * TILE * SCALE, TILE * SCALE + 0.5, TILE * SCALE + 0.5);
+  const mg = root.querySelector<HTMLCanvasElement>('#map')!.getContext('2d')!;
+  const SCALE = MAP_PX / MAP_M;
+  const { nodes, ways } = city.data;
+  let field: RouteField | null = null;
+
   return {
     update(quest: Quest, car: CarState) {
       const timer = quest.phase === 'delivering' ? ` · ⏱ ${fmt(quest.timeLeft)}` : '';
@@ -44,17 +42,40 @@ export function createHud() {
       toast.textContent = quest.toast;
       toast.style.opacity = quest.toastTtl > 0 ? '1' : '0';
 
-      mg.clearRect(0, 0, map.width, map.height);
-      mg.drawImage(bg, 0, 0);
+      mg.clearRect(0, 0, MAP_PX, MAP_PX);
+      mg.save();
+      mg.translate(MAP_PX / 2, MAP_PX / 2);
+      mg.scale(SCALE, SCALE);
+      mg.translate(-car.x, -car.z);
+      mg.lineCap = 'round';
+      mg.lineJoin = 'round';
+      mg.strokeStyle = '#9aa5a0';
+      for (const w of ways) {
+        // ponytail: draws every way each frame (~2k polylines, ~1 ms); cull by bbox if the minimap ever shows in a profile
+        mg.lineWidth = w.w;
+        mg.beginPath();
+        w.n.forEach((n, i) => (i ? mg.lineTo(nodes[n][0], nodes[n][1]) : mg.moveTo(nodes[n][0], nodes[n][1])));
+        mg.stroke();
+      }
       const target = questTarget(quest);
       if (target) {
+        if (field?.target !== target.stop.node) field = routeField(city, target.stop.node);
+        const path = pathFrom(field, nearestNode(city, car.x, car.z));
+        mg.strokeStyle = '#ffd43b';
+        mg.lineWidth = 5;
+        mg.beginPath();
+        mg.moveTo(car.x, car.z);
+        for (const n of path) mg.lineTo(nodes[n][0], nodes[n][1]);
+        mg.lineTo(target.stop.x, target.stop.z);
+        mg.stroke();
         mg.fillStyle = '#ffd43b';
         mg.beginPath();
-        mg.arc(toPx(target.stop.x), toPx(target.stop.z), 5, 0, Math.PI * 2);
+        mg.arc(target.stop.x, target.stop.z, 10, 0, Math.PI * 2);
         mg.fill();
       }
+      mg.restore();
       mg.save();
-      mg.translate(toPx(car.x), toPx(car.z));
+      mg.translate(MAP_PX / 2, MAP_PX / 2);
       mg.rotate(-car.heading); // canvas y-down flips the rotation direction
       mg.fillStyle = '#4dabf7';
       mg.beginPath();

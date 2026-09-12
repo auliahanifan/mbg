@@ -1,11 +1,25 @@
-import type { Poi } from '../world/cityMap';
+import { nearestEdge, pointOnEdge, type City } from '../world/city';
+import type { CityPoi } from '../world/osm';
 
-export const STOP_RADIUS = 5;
+export const STOP_RADIUS = 8;
 export const STOP_SPEED = 1.5;
 const SCHOOL_SCORE = 100;
 const TOAST_SECONDS = 3;
+const AVG_SPEED = 8; // m/s, incl. corners and traffic
 
-export const roundTime = (round: number) => Math.max(60, 150 - 20 * (round - 1));
+export interface Poi extends CityPoi { stop: { x: number; z: number; node: number } }
+
+/** Snaps POIs onto the road: the stop is the projection onto the nearest edge; node = nearer endpoint (for routing). */
+export function questPois(city: City, pois: CityPoi[]): Poi[] {
+  return pois.map((p) => {
+    const { edge, t } = nearestEdge(city, p.x, p.z);
+    const { x, z } = pointOnEdge(city, edge, t);
+    const e = city.edges[edge];
+    return { ...p, stop: { x, z, node: t < 0.5 ? e.a : e.b } };
+  });
+}
+
+export const roundTime = (round: number, routeLen = 0) => (30 + routeLen / AVG_SPEED) * Math.max(0.6, 1 - 0.1 * (round - 1));
 
 export interface Quest {
   phase: 'toKitchen' | 'delivering' | 'done' | 'failed';
@@ -19,8 +33,8 @@ export interface Quest {
   toastTtl: number;
 }
 
-export function createQuest(kitchen: Poi, schools: Poi[], round = 1): Quest {
-  return { phase: 'toKitchen', round, kitchen, schools, next: 0, timeLeft: roundTime(round), score: 0, toast: '', toastTtl: 0 };
+export function createQuest(kitchen: Poi, schools: Poi[], round = 1, routeLen = 0): Quest {
+  return { phase: 'toKitchen', round, kitchen, schools, next: 0, timeLeft: roundTime(round, routeLen), score: 0, toast: '', toastTtl: 0 };
 }
 
 export function questTarget(q: Quest): Poi | null {
