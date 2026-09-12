@@ -7,8 +7,9 @@ import { resolveCar } from './vehicle/collision';
 import { createPlayerCar } from './vehicle/playerCar';
 import { readCarInput, consumeKey } from './input';
 import { createChaseCamera } from './camera/chaseCamera';
-import { createQuest, stepQuest, type Quest } from './quest/quest';
+import { createQuest, stepQuest, questTarget, type Quest } from './quest/quest';
 import { createHud } from './ui/hud';
+import { createMarkers } from './quest/markers';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = createScene(canvas);
@@ -23,6 +24,7 @@ const kitchen = pois.find((p) => p.kind === 'kitchen')!;
 const schools = pois.filter((p) => p.kind === 'school');
 let quest: Quest = createQuest(kitchen, schools);
 const hud = createHud();
+const markers = createMarkers(ctx.scene);
 const resetCar = () => ({ x: start.x, z: start.z, heading: Math.PI / 2, speed: 0 });
 let car: CarState = resetCar(); // facing east along the top road
 
@@ -38,6 +40,7 @@ ctx.renderer.setAnimationLoop(() => {
     quest = createQuest(kitchen, schools, quest.phase === 'done' ? quest.round + 1 : 1);
     car = resetCar();
   }
+  markers.update(questTarget(quest), car, clock.elapsedTime);
   hud.update(quest, car);
 
   chase.update(car, dt);
