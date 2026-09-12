@@ -53,15 +53,6 @@ export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   sun.shadow.normalBias = 0.02;
   scene.add(sun, sun.target);
 
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(8000, 8000),
-    new THREE.MeshStandardMaterial({ color: 0x5e7a3c, roughness: 1 }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.05;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();

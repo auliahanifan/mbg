@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadModel } from '../assets';
 import type { TrafficCar } from './traffic';
+import { FLAT, type Ground } from '../world/terrain';
 
 const WHEEL_RADIUS = 0.3;
 const SMOOTH = 10; // visual lerp hides the lane-offset jump when a car turns a corner
@@ -12,11 +13,11 @@ const lerpAngle = (a: number, b: number, k: number) => {
   return a + d * k;
 };
 
-export async function createTrafficRenderer(scene: THREE.Scene, cars: TrafficCar[]) {
+export async function createTrafficRenderer(scene: THREE.Scene, cars: TrafficCar[], ground: Ground = FLAT) {
   const meshes = await Promise.all(
     cars.map(async (c) => {
       const m = await loadModel(c.model);
-      m.position.set(c.x, 0, c.z);
+      m.position.set(c.x, ground.y(c.x, c.z), c.z);
       m.rotation.y = c.heading;
       scene.add(m);
       const wheels = m.children.filter((o) => o.name.startsWith('wheel'));
@@ -28,7 +29,7 @@ export async function createTrafficRenderer(scene: THREE.Scene, cars: TrafficCar
       const k = 1 - Math.exp(-SMOOTH * dt);
       cars.forEach((c, i) => {
         const { m, wheels } = meshes[i];
-        const target = new THREE.Vector3(c.x, 0, c.z);
+        const target = new THREE.Vector3(c.x, ground.y(c.x, c.z), c.z);
         if (m.position.distanceTo(target) > 20) m.position.copy(target); // respawn teleport: don't streak across the map
         m.position.lerp(target, k);
         m.rotation.y = lerpAngle(m.rotation.y, c.heading, k);

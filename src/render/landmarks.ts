@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { CityPoi } from '../world/osm';
+import { HALF_SIZE } from '../world/osm';
+import { FLAT, type Ground } from '../world/terrain';
 
 const WHITE = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.5 });
 
@@ -26,7 +28,7 @@ function makeLabel(text: string): THREE.Sprite {
 }
 
 /** Lotus tower: slim stem, viewing deck, bulb. ~30 m tall so it reads as the city's landmark from anywhere. */
-function menaraTeratai(x: number, z: number): THREE.Group {
+function menaraTeratai(x: number, y: number, z: number): THREE.Group {
   const g = new THREE.Group();
   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.3, 26, 12), WHITE);
   stem.position.y = 13;
@@ -36,28 +38,29 @@ function menaraTeratai(x: number, z: number): THREE.Group {
   bulb.position.y = 28.5;
   g.add(stem, deck, bulb);
   g.traverse((o) => { o.castShadow = true; });
-  g.position.set(x, 0, z);
+  g.position.set(x, y, z);
   return g;
 }
 
 /** Gunung Slamet silhouette beyond the north edge of the map; fog off so it stays a hazy blue shape. */
-function gunungSlamet(): THREE.Mesh {
+function gunungSlamet(y: number): THREE.Mesh {
   const m = new THREE.Mesh(
     new THREE.ConeGeometry(900, 300, 9),
     new THREE.MeshStandardMaterial({ color: 0x8fa3b8, roughness: 1, flatShading: true, fog: false }),
   );
-  m.position.set(0, 150, -2600);
+  m.position.set(0, y + 150, -2600);
   return m;
 }
 
-export function buildLandmarks(pois: CityPoi[]): THREE.Group {
+export function buildLandmarks(pois: CityPoi[], ground: Ground = FLAT): THREE.Group {
   const g = new THREE.Group();
   for (const p of pois) {
     const label = makeLabel(p.name);
-    label.position.set(p.x, p.id === 'M' ? 36 : 14, p.z);
+    const y = ground.y(p.x, p.z);
+    label.position.set(p.x, y + (p.id === 'M' ? 36 : 14), p.z);
     g.add(label);
-    if (p.id === 'M') g.add(menaraTeratai(p.x, p.z));
+    if (p.id === 'M') g.add(menaraTeratai(p.x, y, p.z));
   }
-  g.add(gunungSlamet());
+  g.add(gunungSlamet(ground.y(0, -HALF_SIZE)));
   return g;
 }

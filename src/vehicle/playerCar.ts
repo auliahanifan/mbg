@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { loadModel } from '../assets';
 import type { CarInput, CarState } from './carPhysics';
 import { paintWhite } from './livery';
+import { FLAT, type Ground } from '../world/terrain';
 
 const WHEEL_RADIUS = 0.3;
 
 export interface PlayerCar {
   group: THREE.Group;
-  sync(state: CarState, input: CarInput, dt: number): void;
+  sync(state: CarState, input: CarInput, dt: number, ground?: Ground): void;
 }
 
 const BGN_BLUE = '#071e49';
@@ -72,9 +73,15 @@ export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
 
   return {
     group,
-    sync(state, input, dt) {
-      group.position.set(state.x, 0, state.z);
-      group.rotation.y = state.heading;
+    sync(state, input, dt, ground = FLAT) {
+      const fx = Math.sin(state.heading);
+      const fz = Math.cos(state.heading);
+      const y = ground.y(state.x, state.z);
+      // pitch from the ground 1.5 m ahead/behind, roll from 1 m left/right (local +x is left)
+      const pitch = -Math.atan2(ground.y(state.x + fx * 1.5, state.z + fz * 1.5) - ground.y(state.x - fx * 1.5, state.z - fz * 1.5), 3);
+      const roll = Math.atan2(ground.y(state.x + fz, state.z - fx) - ground.y(state.x - fz, state.z + fx), 2);
+      group.position.set(state.x, y, state.z);
+      group.rotation.set(pitch, state.heading, roll, 'YXZ');
       for (const w of wheels) w.rotation.x += (state.speed * dt) / WHEEL_RADIUS;
       for (const w of front) w.rotation.y = input.steer * 0.45;
     },

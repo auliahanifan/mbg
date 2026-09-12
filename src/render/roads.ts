@@ -1,15 +1,22 @@
 import * as THREE from 'three';
 import type { City } from '../world/city';
+import { densify, FLAT, type Ground } from '../world/terrain';
 
 const SIDEWALK_EXTRA = 2.4;
 const DASH = 3;
 const MARK_W = 0.15;
-const Y = { sidewalk: 0.02, asphalt: 0.04, marking: 0.06 };
+const Y = { sidewalk: 0.03, asphalt: 0.06, marking: 0.09 };
 
 export type Geo = { positions: number[]; indices: number[] };
+/** Constant height, or a height per (x, z) so the strip follows the ground. */
+export type Y = number | ((x: number, z: number) => number);
+const yAt = (y: Y): ((x: number, z: number) => number) => (typeof y === 'number' ? () => y : y);
+/** Ground height plus a constant lift. */
+export const lift = (ground: Ground, dy: number) => (x: number, z: number) => ground.y(x, z) + dy;
 
 /** Triangle strip along a polyline: vertices 2i (left, +normal) and 2i+1 (right) per point, mitered at interior points. Pure. */
-export function ribbon(pts: [number, number][], width: number, y: number): Geo {
+export function ribbon(pts: [number, number][], width: number, y: Y): Geo {
+  const h = yAt(y);
   const p = pts.filter((q, i) => i === 0 || Math.hypot(q[0] - pts[i - 1][0], q[1] - pts[i - 1][1]) > 1e-3);
   const positions: number[] = [];
   const indices: number[] = [];
@@ -38,7 +45,7 @@ export function ribbon(pts: [number, number][], width: number, y: number): Geo {
     }
     const ox = mx * scale * (width / 2) || 0;
     const oz = mz * scale * (width / 2) || 0;
-    positions.push(p[i][0] + ox, y, p[i][1] + oz, p[i][0] - ox, y, p[i][1] - oz);
+    positions.push(p[i][0] + ox, h(p[i][0] + ox, p[i][1] + oz), p[i][1] + oz, p[i][0] - ox, h(p[i][0] - ox, p[i][1] - oz), p[i][1] - oz);
     if (i > 0) {
       const b = 2 * (i - 1);
       indices.push(b, b + 2, b + 1, b + 1, b + 2, b + 3);
@@ -47,12 +54,15 @@ export function ribbon(pts: [number, number][], width: number, y: number): Geo {
   return { positions, indices };
 }
 
-export function disc(x: number, z: number, r: number, y: number, segments = 16): Geo {
-  const positions = [x, y, z];
+export function disc(x: number, z: number, r: number, y: Y, segments = 16): Geo {
+  const h = yAt(y);
+  const positions = [x, h(x, z), z];
   const indices: number[] = [];
   for (let i = 0; i < segments; i++) {
     const a = (i / segments) * Math.PI * 2;
-    positions.push(x + Math.cos(a) * r, y, z + Math.sin(a) * r);
+    const px = x + Math.cos(a) * r;
+    const pz = z + Math.sin(a) * r;
+    positions.push(px, h(px, pz), pz);
     indices.push(0, 1 + ((i + 1) % segments), 1 + i);
   }
   return { positions, indices };
@@ -74,7 +84,7 @@ export function merge(parts: Geo[]): THREE.BufferGeometry {
 }
 
 /** Dashed centre line along a polyline, starting/ending `margin` metres from the ends. Dashes that would straddle a vertex are skipped. */
-export function dashes(pts: [number, number][], margin: number, y: number): Geo[] {
+export function dashes(pts: [number, number][], margin: number, y: Y): Geo[] {
   const segs = pts.slice(1).map((b, i) => ({ a: pts[i], b, len: Math.hypot(b[0] - pts[i][0], b[1] - pts[i][1]) }));
   const total = segs.reduce((s, g) => s + g.len, 0);
   const out: Geo[] = [];
@@ -93,23 +103,24 @@ export function dashes(pts: [number, number][], margin: number, y: number): Geo[
   return out;
 }
 
-export function buildRoads(city: City): THREE.Group {
+export function buildRoads(city: City, ground: Ground = FLAT): THREE.Group {
   const { nodes, ways } = city.data;
+  const Yg = { sidewalk: lift(ground, Y.sidewalk), asphalt: lift(ground, Y.asphalt), marking: lift(ground, Y.marking) };
   const sidewalk: Geo[] = [];
   const asphalt: Geo[] = [];
   const marking: Geo[] = [];
   const endRadius = new Map<number, number>();
   for (const way of ways) {
-    const pts = way.n.map((i) => nodes[i]);
-    sidewalk.push(ribbon(pts, way.w + SIDEWALK_EXTRA, Y.sidewalk));
-    asphalt.push(ribbon(pts, way.w, Y.asphalt));
-    if (way.w >= 6) marking.push(...dashes(pts, way.w, Y.marking));
+    const pts = densify(way.n.map((i) => nodes[i]), 10);
+    sidewalk.push(ribbon(pts, way.w + SIDEWALK_EXTRA, Yg.sidewalk));
+    asphalt.push(ribbon(pts, way.w, Yg.asphalt));
+    if (way.w >= 6) marking.push(...dashes(pts, way.w, Yg.marking));
     for (const n of [way.n[0], way.n[way.n.length - 1]]) endRadius.set(n, Math.max(endRadius.get(n) ?? 0, way.w / 2));
   }
   for (const [n, r] of endRadius) {
     const [x, z] = nodes[n];
-    sidewalk.push(disc(x, z, r + SIDEWALK_EXTRA / 2, Y.sidewalk));
-    asphalt.push(disc(x, z, r, Y.asphalt));
+    sidewalk.push(disc(x, z, r + SIDEWALK_EXTRA / 2, Yg.sidewalk));
+    asphalt.push(disc(x, z, r, Yg.asphalt));
   }
   const mat = (color: number, offset: number) =>
     new THREE.MeshStandardMaterial({ color, roughness: 0.95, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -offset, polygonOffsetUnits: -offset });

@@ -13,6 +13,8 @@ export const project = (lat: number, lon: number): [number, number] => [
   round1(-(lat - CENTER.lat) * M_PER_DEG_LAT),
 ];
 
+export const unproject = (x: number, z: number) => ({ lat: CENTER.lat - z / M_PER_DEG_LAT, lon: CENTER.lon + x / M_PER_DEG_LON });
+
 export const bbox = () => ({
   south: CENTER.lat - HALF_SIZE / M_PER_DEG_LAT,
   north: CENTER.lat + HALF_SIZE / M_PER_DEG_LAT,

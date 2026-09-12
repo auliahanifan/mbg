@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import type { Poi } from './quest';
 import type { CarState } from '../vehicle/carPhysics';
 import { STOP_RADIUS } from './quest';
+import { FLAT, type Ground } from '../world/terrain';
 
-export function createMarkers(scene: THREE.Scene) {
+export function createMarkers(scene: THREE.Scene, ground: Ground = FLAT) {
   const ring = new THREE.Mesh(
     new THREE.CylinderGeometry(STOP_RADIUS * 0.7, STOP_RADIUS * 0.7, 1.2, 40, 1, true),
     new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
@@ -31,9 +32,9 @@ export function createMarkers(scene: THREE.Scene) {
     update(poi: Poi | null, car: CarState, t: number) {
       target.visible = arrowPivot.visible = !!poi;
       if (!poi) return;
-      target.position.set(poi.stop.x, 0, poi.stop.z);
+      target.position.set(poi.stop.x, ground.y(poi.stop.x, poi.stop.z), poi.stop.z);
       ring.rotation.y = t;
-      arrowPivot.position.set(car.x, 4 + Math.sin(t * 4) * 0.2, car.z);
+      arrowPivot.position.set(car.x, ground.y(car.x, car.z) + 4 + Math.sin(t * 4) * 0.2, car.z);
       arrowPivot.rotation.y = Math.atan2(poi.stop.x - car.x, poi.stop.z - car.z);
     },
   };

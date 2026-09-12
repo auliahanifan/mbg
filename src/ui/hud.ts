@@ -3,12 +3,13 @@ import { questText, questTarget, type Quest } from '../quest/quest';
 import { nearestEdge, type City } from '../world/city';
 import { routeField, pathFrom, type RouteField } from '../world/routing';
 import { labelSpots } from './mapLabels';
+import { FLAT, type Ground } from '../world/terrain';
 
 const KMH_PER_UNIT = 3.6; // 1 unit = 1 m
 const MAP_PX = 200;
 const MAP_M = 400; // window width in metres
 
-export function createHud(city: City) {
+export function createHud(city: City, ground: Ground = FLAT) {
   const root = document.getElementById('hud')!;
   root.innerHTML = `
     <style>
@@ -17,6 +18,7 @@ export function createHud(city: City) {
       #q small { display: block; font-weight: 400; opacity: .85; margin-top: 4px; }
       #speed { bottom: 16px; left: 16px; font-size: 34px; font-weight: 800; }
       #speed span { font-size: 14px; font-weight: 400; margin-left: 4px; }
+      #speed small { display: block; font-size: 13px; font-weight: 400; opacity: .85; }
       #toast { top: 18%; left: 50%; transform: translateX(-50%); font-size: 26px; font-weight: 700; color: #ffe066; transition: opacity .3s; }
       #help { bottom: 16px; right: 16px; font-size: 13px; opacity: .8; }
       #street { bottom: 16px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 600; white-space: nowrap; }
@@ -43,7 +45,7 @@ export function createHud(city: City) {
     update(quest: Quest, car: CarState) {
       const timer = quest.phase === 'delivering' ? ` · ⏱ ${fmt(quest.timeLeft)}` : '';
       q.innerHTML = `${questText(quest)}<small>Ronde ${quest.round} · Skor ${quest.score}${timer}</small>`;
-      speed.innerHTML = `${Math.round(Math.abs(car.speed) * KMH_PER_UNIT)}<span>km/j</span>`;
+      speed.innerHTML = `${Math.round(Math.abs(car.speed) * KMH_PER_UNIT)}<span>km/j</span><small>${Math.round(ground.y(car.x, car.z) + ground.base)} mdpl</small>`;
       toast.textContent = quest.toast;
       toast.style.opacity = quest.toastTtl > 0 ? '1' : '0';
 
