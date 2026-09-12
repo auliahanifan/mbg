@@ -20,6 +20,11 @@ describe('stepCar', () => {
     expect(s.speed).toBeLessThanOrEqual(MAX_SPEED);
     expect(s.speed).toBeGreaterThan(MAX_SPEED * 0.6);
   });
+  it('reaches 200 km/h flat out', () => {
+    const s = run(rest, { ...idle, throttle: 1 }, 25);
+    expect(s.speed * 3.6).toBeCloseTo(200, 1);
+    expect(run(rest, { ...idle, throttle: 1 }, 10).speed * 3.6).toBeGreaterThan(150); // and gets there in a reasonable run-up
+  });
   it('reverse is slow and capped', () => {
     const s = run(rest, { ...idle, throttle: -1 }, 10);
     expect(s.speed).toBeLessThan(0);
