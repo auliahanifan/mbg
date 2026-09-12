@@ -24,7 +24,7 @@ function mbgDecal(): THREE.Mesh {
   g.fillText('Makan Bergizi Gratis', 256, 220);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.95), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
+  return new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.8), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
 }
 
 export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
@@ -34,7 +34,7 @@ export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
   // decals on both sides of the cargo box (body is 1.5 wide; box sits roughly y 1..2.5, z -1.6..0.4)
   for (const side of [1, -1]) {
     const d = mbgDecal();
-    d.position.set(side * 0.76, 1.65, -0.55);
+    d.position.set(side * 0.76, 1.1, -0.7);
     d.rotation.y = side * (Math.PI / 2);
     group.add(d);
   }

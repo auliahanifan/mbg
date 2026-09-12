@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createScene } from './render/scene';
+import { createPost } from './render/post';
 import { buildCity } from './world/cityBuilder';
 import { MAP, tileCenter, collisionBoxes } from './world/cityMap';
 import { stepCar, type CarState } from './vehicle/carPhysics';
@@ -15,6 +16,7 @@ import { createTrafficRenderer } from './traffic/trafficRenderer';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = createScene(canvas);
+const post = createPost(ctx);
 const { pois } = await buildCity(ctx.scene);
 const player = await createPlayerCar(ctx.scene);
 const chase = createChaseCamera(ctx);
@@ -50,5 +52,5 @@ ctx.renderer.setAnimationLoop(() => {
   hud.update(quest, car);
 
   chase.update(car, dt);
-  ctx.renderer.render(ctx.scene, ctx.camera);
+  post.render();
 });
