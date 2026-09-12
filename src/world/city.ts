@@ -1,22 +1,22 @@
 import type { CityData } from './osm';
 
-export interface Edge { a: number; b: number; w: number; len: number }
+export interface Edge { a: number; b: number; w: number; len: number; way: number }
 export interface City { data: CityData; edges: Edge[]; adj: number[][] }
 
 export function loadCity(data: CityData): City {
   const edges: Edge[] = [];
   const adj: number[][] = data.nodes.map(() => []);
-  for (const way of data.ways) {
+  data.ways.forEach((way, wi) => {
     for (let i = 0; i + 1 < way.n.length; i++) {
       const a = way.n[i];
       const b = way.n[i + 1];
       const len = Math.hypot(data.nodes[b][0] - data.nodes[a][0], data.nodes[b][1] - data.nodes[a][1]);
       if (len < 0.01) continue;
-      const idx = edges.push({ a, b, w: way.w, len }) - 1;
+      const idx = edges.push({ a, b, w: way.w, len, way: wi }) - 1;
       adj[a].push(idx);
       adj[b].push(idx);
     }
-  }
+  });
   return { data, edges, adj };
 }
 

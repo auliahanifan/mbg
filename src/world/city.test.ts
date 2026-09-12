@@ -14,9 +14,9 @@ describe('loadCity', () => {
   const city = loadCity(tiny);
   it('builds one edge per consecutive node pair, skipping zero-length', () => {
     expect(city.edges).toEqual([
-      { a: 0, b: 1, w: 6, len: 100 },
-      { a: 1, b: 2, w: 6, len: 100 },
-      { a: 1, b: 3, w: 4, len: 100 },
+      { a: 0, b: 1, w: 6, len: 100, way: 0 },
+      { a: 1, b: 2, w: 6, len: 100, way: 0 },
+      { a: 1, b: 3, w: 4, len: 100, way: 1 },
     ]);
     expect(edgesFrom(city, 1)).toEqual([0, 1, 2]);
     expect(edgesFrom(city, 3)).toEqual([2]);
