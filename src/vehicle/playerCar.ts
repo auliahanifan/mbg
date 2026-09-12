@@ -41,8 +41,8 @@ async function liveryTexture(): Promise<THREE.Texture> {
   return tex;
 }
 
-function decal(tex: THREE.Texture, w: number, h: number): THREE.Mesh {
-  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
+function decal(mat: THREE.Material, w: number, h: number): THREE.Mesh {
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
 }
 
 export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
@@ -51,15 +51,16 @@ export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
   scene.add(group);
 
   const tex = await liveryTexture();
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
   // cargo box sides: x ±0.65, y 0.3..1.55, z -1.6..0.45 (measured from delivery.glb)
   for (const side of [1, -1]) {
-    const d = decal(tex, 1.9, 1.04);
+    const d = decal(mat, 1.9, 1.04);
     d.position.set(side * 0.66, 0.93, -0.57);
     d.rotation.y = side * (Math.PI / 2);
     group.add(d);
   }
   // rear door faces the chase camera all game
-  const rear = decal(tex, 1.0, 0.55);
+  const rear = decal(mat, 1.0, 0.55);
   rear.position.set(0, 1.05, -1.6);
   rear.rotation.y = Math.PI;
   group.add(rear);

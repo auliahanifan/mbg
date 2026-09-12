@@ -31,7 +31,7 @@ Game browser 3D bergaya GTA (third-person chase cam) di mana pemain mengemudikan
 
 ## Visual target
 
-Kota low-poly terang ala siang hari: sun directional shadow yang mengikuti truk, hemisphere light, `Sky` addon, fog horizon, bloom tipis, MSAA. Truk pemain = `delivery.glb` dengan decal "MBG" di kedua sisi boks.
+Kota low-poly terang ala siang hari: sun directional shadow yang mengikuti truk, hemisphere light, `Sky` addon, fog horizon, bloom tipis, MSAA. Truk pemain = `delivery.glb` dengan decal "MBG" di kedua sisi boks. (lihat amandemen di bawah: kini putih dengan livery BGN)
 
 ## Non-goals v1
 

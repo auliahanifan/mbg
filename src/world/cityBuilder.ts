@@ -98,8 +98,6 @@ export async function buildCity(scene: THREE.Scene, map: string[] = MAP): Promis
           break;
         }
         case '.':
-          jobs.push(place(city, 'tile-low', x, z, TILE), place(city, pick(COMMERCIAL, row, col), x, z, BUILDING_SCALE, rot));
-          break;
         case 'X':
           jobs.push(place(city, 'tile-low', x, z, TILE), place(city, pick(COMMERCIAL, row, col), x, z, BUILDING_SCALE, rot));
           break;
