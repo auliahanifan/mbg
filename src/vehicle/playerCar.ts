@@ -10,22 +10,39 @@ export interface PlayerCar {
   sync(state: CarState, input: CarInput, dt: number): void;
 }
 
-function mbgDecal(): THREE.Mesh {
+const BGN_BLUE = '#071e49';
+const BGN_GREEN = '#92d05d';
+
+/** Side/rear sticker: BGN emblem, "MAKAN BERGIZI GRATIS", SPPG name, green+blue stripe. 1024x560 → aspect 1.83. */
+async function liveryTexture(): Promise<THREE.Texture> {
+  const logo = await new THREE.ImageLoader().loadAsync('/logo-bgn.png');
   const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 256;
+  c.width = 1024;
+  c.height = 560;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#1d4ed8';
-  g.fillRect(0, 0, 512, 256);
   g.fillStyle = '#fff';
-  g.textAlign = 'center';
-  g.font = 'bold 150px system-ui, sans-serif';
-  g.fillText('MBG', 256, 150);
-  g.font = 'bold 44px system-ui, sans-serif';
-  g.fillText('Makan Bergizi Gratis', 256, 220);
+  g.fillRect(0, 0, 1024, 560);
+  g.fillStyle = BGN_GREEN;
+  g.fillRect(0, 476, 1024, 52);
+  g.fillStyle = BGN_BLUE;
+  g.fillRect(0, 528, 1024, 32);
+  g.drawImage(logo, 40, 40, 400, 400);
+  g.fillStyle = BGN_BLUE;
+  g.textAlign = 'left';
+  g.font = 'bold 108px system-ui, sans-serif';
+  g.fillText('MAKAN', 470, 150);
+  g.fillText('BERGIZI', 470, 262);
+  g.fillText('GRATIS', 470, 374);
+  g.font = 'bold 34px system-ui, sans-serif';
+  g.fillText('SPPG POLRESTA BANYUMAS', 470, 440);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.8), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function decal(tex: THREE.Texture, w: number, h: number): THREE.Mesh {
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
 }
 
 export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
@@ -33,13 +50,19 @@ export async function createPlayerCar(scene: THREE.Scene): Promise<PlayerCar> {
   paintWhite(group);
   scene.add(group);
 
-  // decals on both sides of the cargo box (body is 1.5 wide; box sits roughly y 1..2.5, z -1.6..0.4)
+  const tex = await liveryTexture();
+  // cargo box sides: x ±0.65, y 0.3..1.55, z -1.6..0.45 (measured from delivery.glb)
   for (const side of [1, -1]) {
-    const d = mbgDecal();
-    d.position.set(side * 0.76, 1.1, -0.7);
+    const d = decal(tex, 1.9, 1.04);
+    d.position.set(side * 0.66, 0.93, -0.57);
     d.rotation.y = side * (Math.PI / 2);
     group.add(d);
   }
+  // rear door faces the chase camera all game
+  const rear = decal(tex, 1.0, 0.55);
+  rear.position.set(0, 1.05, -1.6);
+  rear.rotation.y = Math.PI;
+  group.add(rear);
 
   const wheels = ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right']
     .map((n) => group.getObjectByName(n))
