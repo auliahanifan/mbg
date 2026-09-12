@@ -8,6 +8,7 @@ describe('shortName', () => {
     expect(shortName('Jalan Profesor Dokter Soeharso')).toBe('Jl. Prof. Dr. Soeharso');
     expect(shortName('Gang Mawar')).toBe('Gg. Mawar');
     expect(shortName('Kranji')).toBe('Kranji');
+    expect(shortName('Jalan Doktor Angka')).toBe('Jl. Dr. Angka');
   });
 });
 
@@ -32,6 +33,23 @@ describe('labelSpots', () => {
     ];
     const spots = labelSpots({ nodes, ways }, 100, 0, 200);
     expect(spots).toHaveLength(1);
-    expect(spots[0].len).toBe(100);
+    expect(spots[0].len).toBe(200);
+    expect([50, 150]).toContain(spots[0].x);
+  });
+  it('accumulates length per name across many ways, placed on the longest piece', () => {
+    const panjangNodes: [number, number][] = [[0, 0], [60, 0], [120, 0], [180, 0]];
+    const nodes2 = [...panjangNodes, [0, 100] as [number, number], [100, 100] as [number, number]];
+    const ways = [
+      { n: [0, 1], w: 6, name: 'Jalan Panjang' },
+      { n: [1, 2], w: 6, name: 'Jalan Panjang' },
+      { n: [2, 3], w: 6, name: 'Jalan Panjang' },
+      { n: [4, 5], w: 6, name: 'Jalan Lain' },
+    ];
+    const spots = labelSpots({ nodes: nodes2, ways }, 90, 50, 200);
+    const panjang = spots.find((s) => s.text === 'Jl. Panjang')!;
+    const lain = spots.find((s) => s.text === 'Jl. Lain')!;
+    expect(panjang.len).toBe(180);
+    expect([30, 90, 150]).toContain(panjang.x);
+    expect(lain.len).toBe(100);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadCity, edgesFrom, pointOnEdge, nearestEdge, nearestNode } from './city';
+import { loadCity, edgesFrom, pointOnEdge, nearestEdge } from './city';
 import type { CityData } from './osm';
 
 // 0 --100-- 1 --100-- 2      node 3 is 100 m south (+z) of node 1
@@ -29,7 +29,5 @@ describe('loadCity', () => {
     expect(nearestEdge(city, 150, 10)).toEqual({ edge: 1, t: 0.5, dist: 10 });
     expect(nearestEdge(city, 300, 0)).toEqual({ edge: 1, t: 1, dist: 100 });
     expect(nearestEdge(city, 95, 60).edge).toBe(2);
-    expect(nearestNode(city, 160, 3)).toBe(2);
-    expect(nearestNode(city, 140, 3)).toBe(1);
   });
 });

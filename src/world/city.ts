@@ -44,8 +44,3 @@ export function nearestEdge(city: City, x: number, z: number): { edge: number; t
   return best;
 }
 
-export function nearestNode(city: City, x: number, z: number): number {
-  const { edge, t } = nearestEdge(city, x, z);
-  const e = city.edges[edge];
-  return t < 0.5 ? e.a : e.b;
-}
