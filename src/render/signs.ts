@@ -6,7 +6,7 @@ import { frontSide, type Front } from './buildings';
 const CELL_W = 512;
 const CELL_H = 64;
 const COLS = 8;
-const ROWS = 32; // 256 names per atlas: the map has ~175
+const ROWS = 64; // 512 names per 4096² atlas: the map has ~280 once the POI nodes are named in
 const SIGN_H = 1.2;
 const SIGN_Y = 2.3; // bottom of the board: over the shutters, under the first-floor windows
 const STANDOFF = 0.15;

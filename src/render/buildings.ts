@@ -10,6 +10,8 @@ const FLAT_ROOFS = [0x9d9c98, 0x8f918f, 0xa8a49d];
 const SIGNBOARDS = [0xd64541, 0x1c56a0, 0x1f7a3e, 0xf2c400, 0xf4f2ec, 0x1a1a1a, 0xe8862a]; // papan nama ruko: merah, biru, hijau, kuning, putih, hitam, oranye
 const UNIT = 5.5; // metres of shopfront per ruko unit: the module a Purwokerto row is actually built in
 const BAND = 0.65; // the signboard band at the top of a ruko's ground floor (rukoTexture's top 26 px)
+const PARAPET_H = 0.75; // the dwarf wall every flat Indonesian roof is edged with, hiding the roof deck from the street
+const TANDON = [0xe4771f, 0x2f6fb0, 0xd8d5cc]; // tandon air: the orange, blue and white tanks on Purwokerto rooftops
 const CANOPY = 0x8e9297; // seng gelombang / cor kanopi over the shopfront
 const DOME = 0x3a9a68;
 const MINARET = 0xf2eee4;
@@ -325,6 +327,7 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
   const flat = batch();
   const yards = batch(); // own mesh: polygon-offset onto the terrain like the sidewalks
   const color = new THREE.Color();
+  const tandons: [number, number, number, number][] = []; // x, y, z, seed
   const board = new THREE.Color(); // `wall` aliases `color`, so the band needs its own
   for (const b of buildings) {
     if (b.p.length < 3) continue;
@@ -338,7 +341,7 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     // Every flat-roofed block up to 3 storeys standing on a street in Purwokerto is a ruko row, however long its
     // footprint: shopfront, papan nama, kanopi over the trotoar. Only the deep ones (malls, hospitals) stay plain.
     const isRuko = !b.r && b.h <= 3 * FLOOR && !!front && box.short <= 40;
-    const groundBatch = b.r === 'hip' || b.r === 'gable' ? house : isRuko ? ruko : upper;
+    const groundBatch = b.r === 'hip' || b.r === 'gable' || b.r === 'joglo' ? house : isRuko ? ruko : upper;
     push(groundBatch, wallQuads(b.p, Math.min(h, FLOOR + SINK), y0, groundBatch === house ? 3 * WINDOW_W : WINDOW_W), wall);
     if (isRuko) {
       for (const u of bandUnits(offsetRing(b.p, 0.04), BAND, y0 + FLOOR - BAND)) push(flat, u.geo, board.setHex(SIGNBOARDS[u.seed % SIGNBOARDS.length])); // a colour per shop unit over the texture's red band
@@ -351,7 +354,11 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
       push(upper, wallQuads(ring, b.t, top), wall);
       push(flat, flatCap(ring, top + b.t), color.setHex(FLAT_ROOFS[(seed >>> 8) % FLAT_ROOFS.length]));
     }
-    if (b.r === 'hip' || b.r === 'gable') {
+    if (b.r === 'joglo') { // tiered Javanese pavilion roof: a wide shallow skirt, then the steep brunjung over the middle
+      const tile = color.setHex(HIP_ROOFS[(seed >>> 8) % HIP_ROOFS.length]);
+      push(hip, hipRoof(box, top, 1.6, false, 1.5), tile);
+      push(hip, hipRoof({ ...box, long: box.long * 0.55, short: box.short * 0.55 }, top + 1.6, 0.42 * box.short), tile);
+    } else if (b.r === 'hip' || b.r === 'gable') {
       const roof = hipRoof(box, top, Math.min(4, Math.max(1.2, 0.3 * box.short)), b.r === 'gable');
       const tile = color.setHex(HIP_ROOFS[(seed >>> 8) % HIP_ROOFS.length]);
       push(hip, roof, tile);
@@ -366,6 +373,10 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
       }
     } else {
       push(flat, flatCap(b.p, top), color.setHex(FLAT_ROOFS[(seed >>> 8) % FLAT_ROOFS.length]));
+      if (!b.t && !b.r) { // dak beton: a parapet round the edge and a tandon air in one corner
+        push(flat, wallQuads(b.p, PARAPET_H, top, WINDOW_W), wall);
+        if (box.short >= 5 && box.long >= 5) tandons.push([box.cx + box.ux * (box.long / 2 - 1.6) - box.uz * (box.short / 2 - 1.6), top + PARAPET_H, box.cz + box.uz * (box.long / 2 - 1.6) + box.ux * (box.short / 2 - 1.6), seed]);
+      }
       if (b.r === 'dome') {
         push(flat, dome(box.cx, box.cz, top, Math.min(7, Math.sqrt(a) / 3)), color.setHex(DOME));
         if (a >= 250) { // minaret at one corner of the oriented box, pulled 2 m inside
@@ -395,6 +406,20 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
+  }
+  if (tandons.length) { // one instanced tank (1.1 m tall, 0.55 m across) per flat roof, on its little steel stand
+    const tank = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.55, 0.55, 1.1, 10).translate(0, 0.85, 0), new THREE.MeshStandardMaterial({ roughness: 0.6 }), tandons.length);
+    const o = new THREE.Object3D();
+    const c = new THREE.Color();
+    tandons.forEach(([x, y, z, seed], i) => {
+      o.position.set(x, y, z);
+      o.rotation.set(0, (seed % 628) / 100, 0);
+      o.updateMatrix();
+      tank.setMatrixAt(i, o.matrix);
+      tank.setColorAt(i, c.setHex(TANDON[(seed >>> 12) % TANDON.length]));
+    });
+    tank.castShadow = true;
+    group.add(tank);
   }
   return group;
 }

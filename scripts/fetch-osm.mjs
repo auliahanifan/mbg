@@ -5,7 +5,7 @@ import { bbox, buildCityData } from '../src/world/osm.ts';
 
 const { south, west, north, east } = bbox();
 const box = `${south},${west},${north},${east}`;
-const query = `[out:json][timeout:180];(way["highway"](${box});way["building"](${box});way["landuse"](${box});way["natural"](${box});way["leisure"](${box});way["waterway"](${box});way["railway"](${box});way["amenity"="parking"](${box});node["natural"="tree"](${box}););out body;>;out skel qt;`;
+const query = `[out:json][timeout:180];(way["highway"](${box});way["building"](${box});way["landuse"](${box});way["natural"](${box});way["leisure"](${box});way["waterway"](${box});way["railway"](${box});way["amenity"="parking"](${box});node["natural"="tree"](${box});node["shop"](${box});node["amenity"](${box});node["tourism"](${box});node["office"](${box});node["healthcare"](${box}););out body;>;out skel qt;`;
 const res = await fetch('https://overpass-api.de/api/interpreter', {
   method: 'POST',
   headers: { 'User-Agent': 'kurir-mbg-fetch-osm/1.0' }, // overpass-api.de returns 406 to Node's default UA

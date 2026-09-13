@@ -23,7 +23,7 @@ export const bbox = () => ({
 });
 
 export interface CityPoi { id: string; name: string; kind: 'kitchen' | 'school' | 'landmark'; x: number; z: number }
-export type Roof = 'hip' | 'gable' | 'dome';
+export type Roof = 'hip' | 'gable' | 'dome' | 'joglo';
 export type AreaKind = 'grass' | 'wood' | 'farm' | 'water' | 'sand' | 'paved';
 export type LineKind = 'rail' | 'river' | 'stream';
 export interface CityData {
@@ -124,6 +124,9 @@ const KNOWN: [RegExp, { floors: number; r?: Roof; t?: number }][] = [
   [/^kantor bupati banyumas/i, { floors: 3, r: 'hip' }],
   [/baitussalam/i, { floors: 3, r: 'dome' }],
   [/^museum bank rakyat/i, { floors: 2, r: 'hip' }],
+  [/^pendopo si panji/i, { floors: 1, r: 'joglo' }], // the open Banyumas pavilion on the Alun-alun: one storey under a tiered joglo
+  [/^aston imperium/i, { floors: 12 }], // the tall hotel on Jl. Overste Isdiman
+  [/^pasar wage$/i, { floors: 3 }], // rebuilt 2021 as a multi-storey market
 ];
 
 /**
@@ -237,6 +240,33 @@ export function propagateNames(nodes: [number, number][], ways: CityData['ways']
   }
 }
 
+/**
+ * Names from standalone POI nodes (the way most Indonesian shops, banks and warung are actually mapped) onto the
+ * building they stand in, or failing that the nearest footprint within REACH metres. A building keeps a name it
+ * already had; each POI claims at most one building, so a strip of shops names a strip of ruko.
+ */
+export function nameFromPois(buildings: CityData['buildings'], pois: { x: number; z: number; name: string }[]): void {
+  const taken = new Set<number>();
+  const centre = buildings.map((b) => [b.p.reduce((s, p) => s + p[0], 0) / b.p.length, b.p.reduce((s, p) => s + p[1], 0) / b.p.length] as const);
+  const REACH = 30;
+  for (const poi of pois) {
+    let best = -1;
+    let bestDist = REACH;
+    for (let i = 0; i < buildings.length; i++) {
+      if (taken.has(i) || buildings[i].name) continue;
+      if (pointInRing(poi.x, poi.z, buildings[i].p)) { best = i; break; }
+      const d = Math.hypot(centre[i][0] - poi.x, centre[i][1] - poi.z);
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+    if (best < 0) continue;
+    const b = buildings[best];
+    b.name = poi.name;
+    taken.add(best);
+    const known = KNOWN.find(([re]) => re.test(poi.name))?.[1]; // the name only arrives now, so the landmark table has to be re-read
+    if (known) Object.assign(b, { h: round1(known.floors * FLOOR) }, known.r ? { r: known.r } : {}, known.t ? { t: round1(known.t) } : {});
+  }
+}
+
 export function buildCityData(elements: OsmElement[]): CityData {
   const latLon = new Map<number, [number, number]>();
   for (const e of elements) if (e.type === 'node') latLon.set(e.id, [e.lat, e.lon]);
@@ -256,10 +286,15 @@ export function buildCityData(elements: OsmElement[]): CityData {
   const areas: NonNullable<CityData['areas']> = [];
   const lines: NonNullable<CityData['lines']> = [];
   const trees: [number, number][] = [];
+  const poiNodes: { x: number; z: number; name: string }[] = [];
   for (const e of elements) {
     if (!e.tags) continue;
     if (e.type === 'node') {
       if (e.tags.natural === 'tree') trees.push(project(e.lat, e.lon));
+      else if (e.tags.name && (e.tags.shop || e.tags.amenity || e.tags.tourism || e.tags.office || e.tags.healthcare)) {
+        const [x, z] = project(e.lat, e.lon);
+        poiNodes.push({ x, z, name: e.tags.name });
+      }
       continue;
     }
     if (e.nodes.some((id) => !latLon.has(id))) continue;
@@ -289,6 +324,7 @@ export function buildCityData(elements: OsmElement[]): CityData {
     }
   }
   propagateNames(nodes, ways);
+  nameFromPois(buildings, poiNodes);
   const pois = POIS.map(({ lat, lon, ...rest }) => {
     const [x, z] = project(lat, lon);
     return { ...rest, x, z };
