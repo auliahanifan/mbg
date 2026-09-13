@@ -1,6 +1,7 @@
 import { edgesFrom, pointOnEdge, type City } from '../world/city';
 import type { Circle } from '../vehicle/collision';
 import { pickVehicle, vehicleSpec, vehicleMass } from '../vehicle/vehicles';
+import { approachAt, signalSpeed, type Signals } from './signals';
 
 const LOOK_AHEAD = 10;
 const LOOK_WIDTH = 2.5;
@@ -165,7 +166,7 @@ const blockedBy = (c: TrafficCar, o: { x: number; z: number }) => {
 };
 
 /** Moves every car along the road graph; cars queue behind obstacles/each other; far cars respawn near the player. Mutates `cars`. */
-export function stepTraffic(city: City, cars: TrafficCar[], obstacles: { x: number; z: number }[], dt: number, rng: () => number, player: { x: number; z: number }): void {
+export function stepTraffic(city: City, cars: TrafficCar[], obstacles: { x: number; z: number }[], dt: number, rng: () => number, player: { x: number; z: number }, signals?: Signals): void {
   for (const c of cars) {
     if (c.crash) {
       if (stepCrash(c, dt)) respawn(city, c, rng, player, SPAWN_MIN, KEEP_RADIUS);
@@ -177,12 +178,16 @@ export function stepTraffic(city: City, cars: TrafficCar[], obstacles: { x: numb
       continue;
     }
     const blocked = obstacles.some((o) => blockedBy(c, o)) || cars.some((o) => o !== c && !o.crash && blockedBy(c, o));
-    c.stuck = blocked ? c.stuck + dt : 0;
-    const limit = c.cruise * (city.edges[c.edge].w <= NARROW ? 0.7 : 1);
-    const target = blocked && c.stuck < STUCK_SECONDS ? 0 : limit; // ponytail: after 3s just push through (breaks deadlocks)
-    c.speed = Math.abs(target - c.speed) <= ACCEL * dt ? target : c.speed + Math.sign(target - c.speed) * ACCEL * dt;
     let e = city.edges[c.edge];
+    const ahead = signals && approachAt(signals, c.edge, c.dir === 1);
+    const cap = ahead ? signalSpeed(signals!, ahead, (1 - c.t) * e.len, c.speed, ACCEL) : Infinity;
+    c.stuck = blocked && cap === Infinity ? c.stuck + dt : 0; // queueing at a red is not being stuck
+    const limit = c.cruise * (city.edges[c.edge].w <= NARROW ? 0.7 : 1);
+    const rolling = blocked && c.stuck < STUCK_SECONDS ? 0 : limit; // ponytail: after 3s just push through (breaks deadlocks)
+    const target = Math.min(rolling, cap);
+    c.speed = Math.abs(target - c.speed) <= ACCEL * dt ? target : c.speed + Math.sign(target - c.speed) * ACCEL * dt;
     c.t += (c.speed * dt) / e.len;
+    if (cap !== Infinity) c.t = Math.min(c.t, 1 - ahead!.line / e.len); // never roll over the stop line
     while (c.t >= 1) {
       const overflow = (c.t - 1) * e.len;
       const node = c.dir === 1 ? e.b : e.a;

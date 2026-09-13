@@ -21,6 +21,8 @@ import { createHud } from './ui/hud';
 import { createMarkers } from './quest/markers';
 import { spawnTraffic, stepTraffic, trafficCircles, launch } from './traffic/traffic';
 import { createTrafficRenderer } from './traffic/trafficRenderer';
+import { buildSignals } from './traffic/signals';
+import { createSignalRenderer } from './traffic/signalRenderer';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = createScene(canvas);
@@ -32,7 +34,8 @@ const ground = makeGround(dem);
 const probe = corridorEscape(data);
 const roadEscape = (x: number, z: number) => probe(x, z, -5); // road within 5 m of the probe → pagar in front of the house
 ctx.scene.add(buildGround(ground, data.areas ?? []), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildBuildings(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
-const occupancy = rasterize(data.buildings, data.trees);
+const signals = buildSignals(city);
+const occupancy = rasterize(data.buildings, [...(data.trees ?? []), ...signals.approaches.map((a): [number, number] => [a.x, a.z])]); // signal poles are solid too
 ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
 const player = await createPlayerCar(ctx.scene);
 const chase = createChaseCamera(ctx, ground);
@@ -48,6 +51,7 @@ const resetCar = (): CarState => ({ x: spawn.x, z: spawn.z, heading: spawn.headi
 let car = resetCar();
 const traffic = spawnTraffic(city, 30, Math.random, car);
 const trafficView = createTrafficRenderer(ctx.scene, traffic, ground);
+const signalView = createSignalRenderer(ctx.scene, signals, ground);
 let quest: Quest = createQuest(kitchen, schools, 1, routeLen);
 const hud = createHud(city, ground);
 const markers = createMarkers(ctx.scene, ground);
@@ -64,7 +68,9 @@ ctx.renderer.setAnimationLoop(() => {
   ctx.setTime(hour);
   const input = readCarInput();
   car = stepCar(car, input, dt, GRAVITY * grade(ground, car.x, car.z, car.heading));
-  stepTraffic(city, traffic, [car], dt, Math.random, car);
+  signals.time += dt;
+  signalView.update();
+  stepTraffic(city, traffic, [car], dt, Math.random, car, signals);
   const { car: resolved, hits } = resolveCar(car, boxesAround(occupancy, car.x, car.z), trafficCircles(traffic));
   for (const h of hits) if (h.index >= 0) launch(traffic[h.index], h.nx, h.nz, h.dv);
   if (hits.length) sound.hit(Math.max(...hits.map((h) => h.impact)));
