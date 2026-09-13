@@ -23,7 +23,7 @@ import { createHud } from './ui/hud';
 import { createMarkers } from './quest/markers';
 import { spawnTraffic, stepTraffic, trafficCircles, launch } from './traffic/traffic';
 import { createTrafficRenderer } from './traffic/trafficRenderer';
-import { buildSignals } from './traffic/signals';
+import { buildSignals, hitSignal, signalCircles, stepSignals } from './traffic/signals';
 import { createSignalRenderer } from './traffic/signalRenderer';
 import { spawnPeople, stepPeople, peopleCircles, hitPerson } from './people/people';
 import { createPeopleRenderer } from './people/peopleRenderer';
@@ -39,7 +39,7 @@ const probe = corridorEscape(data);
 const roadEscape = (x: number, z: number) => probe(x, z, -5); // road within 5 m of the probe → pagar in front of the house
 ctx.scene.add(buildGround(ground, data.areas ?? []), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
 const signals = buildSignals(city);
-const occupancy = rasterize(data.buildings, [...(data.trees ?? []), ...signals.approaches.map((a): [number, number] => [a.x, a.z])]); // signal poles are solid too
+const occupancy = rasterize(data.buildings, data.trees ?? []);
 ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
 const parked = buildParkedBikes(city, ground, (x, z) => probe(x, z, 0.6) !== null || boxesAround(occupancy, x, z, 0.3).length > 4, (x, z) => boxesAround(occupancy, x, z, 2.5).length > 4); // on the sidewalk, in front of a building
 ctx.scene.add(parked.group);
@@ -80,12 +80,14 @@ ctx.renderer.setAnimationLoop(() => {
   const input = readCarInput();
   car = stepCar(car, input, dt, GRAVITY * grade(ground, car.x, car.z, car.heading));
   signals.time += dt;
+  stepSignals(signals, dt);
   signalView.update();
   stepTraffic(city, traffic, [car], dt, Math.random, car, signals);
   stepPeople(city, people, dt, Math.random, car, kerbBlocked);
-  const { car: resolved, hits } = resolveCar(car, boxesAround(occupancy, car.x, car.z), [...trafficCircles(traffic), ...peopleCircles(people)]);
+  const { car: resolved, hits } = resolveCar(car, boxesAround(occupancy, car.x, car.z), [...trafficCircles(traffic), ...peopleCircles(people), ...signalCircles(signals)]);
   for (const h of hits) {
-    if (h.index >= traffic.length) hitPerson(people[h.index - traffic.length], h.nx, h.nz, h.dv);
+    if (h.index >= traffic.length + people.length) hitSignal(signals.approaches[h.index - traffic.length - people.length], h.nx, h.nz, h.dv);
+    else if (h.index >= traffic.length) hitPerson(people[h.index - traffic.length], h.nx, h.nz, h.dv);
     else if (h.index >= 0) launch(traffic[h.index], h.nx, h.nz, h.dv);
   }
   if (hits.length) sound.hit(Math.max(...hits.map((h) => h.impact)));

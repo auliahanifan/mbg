@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { aspect, type Signals } from './signals';
+import { aspect, type Approach, type Signals } from './signals';
 import { FLAT, type Ground } from '../world/terrain';
 
 const POLE_H = 3.4;
@@ -33,41 +33,43 @@ function headGeometry(): THREE.BufferGeometry {
 
 export function createSignalRenderer(scene: THREE.Scene, signals: Signals, ground: Ground = FLAT) {
   const { approaches } = signals;
-  const head = headGeometry();
-  const poles = new THREE.Mesh(
-    mergeGeometries(approaches.map((a) => head.clone().applyMatrix4(
-      new THREE.Matrix4().makeRotationY(a.heading).setPosition(a.x, ground.y(a.x, a.z), a.z))), false),
-    new THREE.MeshStandardMaterial({ color: 0x33383c, roughness: 0.55, metalness: 0.35 }),
-  );
+  const poles = new THREE.InstancedMesh(headGeometry(), new THREE.MeshStandardMaterial({ color: 0x33383c, roughness: 0.55, metalness: 0.35 }), approaches.length);
   poles.castShadow = true;
   scene.add(poles);
-
   const lens = new THREE.InstancedMesh(new THREE.CircleGeometry(LENS_R, 14), new THREE.MeshBasicMaterial(), approaches.length * 3);
-  const m = new THREE.Matrix4();
-  approaches.forEach((a, i) => {
-    const fx = Math.sin(a.heading);
-    const fz = Math.cos(a.heading);
-    LENS_Y.forEach((y, k) => {
-      m.makeRotationY(a.heading).setPosition(a.x + fx * FACE, ground.y(a.x, a.z) + y, a.z + fz * FACE);
-      lens.setMatrixAt(i * 3 + k, m);
-      lens.setColorAt(i * 3 + k, DARK[k]);
-    });
-  });
   scene.add(lens);
+
+  const o = new THREE.Object3D();
+  const m = new THREE.Matrix4();
+  const place = (a: Approach, i: number) => {
+    // upright on its footing; once hit, exactly where the sim says: tumbling in the air, flat on the ground
+    o.position.set(a.x, ground.y(a.x, a.z) + (a.crash?.y ?? 0), a.z);
+    o.rotation.set(a.crash ? (a.crash.y > 0 ? a.crash.roll : Math.PI / 2) : 0, a.heading, 0, 'YXZ');
+    o.updateMatrix();
+    poles.setMatrixAt(i, o.matrix);
+    LENS_Y.forEach((y, k) => lens.setMatrixAt(i * 3 + k, m.makeTranslation(0, y, FACE).premultiply(o.matrix)));
+  };
+  approaches.forEach((a, i) => {
+    place(a, i);
+    LENS_Y.forEach((_, k) => lens.setColorAt(i * 3 + k, DARK[k]));
+  });
 
   const shown: string[] = approaches.map(() => '');
   return {
-    /** Repaints only the heads whose aspect actually changed this frame. */
+    /** Repaints only the heads whose aspect actually changed this frame; moves the ones knocked flying. */
     update() {
       let dirty = false;
+      let moved = false;
       approaches.forEach((a, i) => {
-        const now = aspect(signals, a);
+        if (a.crash) { place(a, i); moved = true; }
+        const now = a.crash ? 'dark' : aspect(signals, a); // a fallen head has lost its power
         if (now === shown[i]) return;
         shown[i] = now;
         dirty = true;
-        for (let k = 0; k < 3; k++) lens.setColorAt(i * 3 + k, k === ORDER[now] ? LIT[k] : DARK[k]);
+        for (let k = 0; k < 3; k++) lens.setColorAt(i * 3 + k, now !== 'dark' && k === ORDER[now] ? LIT[k] : DARK[k]);
       });
       if (dirty) lens.instanceColor!.needsUpdate = true;
+      if (moved) poles.instanceMatrix.needsUpdate = lens.instanceMatrix.needsUpdate = true;
     },
   };
 }

@@ -1,4 +1,6 @@
 import type { City } from '../world/city';
+import type { Circle } from '../vehicle/collision';
+import { makeCrash, stepCrash, type Crash } from './traffic';
 
 // A Purwokerto cycle: ~20 s green each way, amber, then a couple of seconds all-red while the
 // junction clears. Two phases — one per axis of the crossing — like every APILL in town.
@@ -14,6 +16,8 @@ const MERGE = 40;      // metres: one junction gets one cycle, not a light per c
 const STOP_BACK = 2.5; // stop line this far back from the far kerb line
 const KERB = 1.6;      // pole this far outside the asphalt edge, on the sidewalk
 const OVER = 0.05;     // slack so a car held exactly on the line doesn't float over it on rounding
+const POLE_MASS = 180; // steel pole and head: a van shrugs it off, and it is light enough to cartwheel
+const POLE_RADIUS = 0.3;
 
 export type Aspect = 'green' | 'amber' | 'red';
 
@@ -27,6 +31,7 @@ export interface Approach {
   z: number;
   heading: number; // faces back down the road, at the drivers it stops
   line: number;    // metres back from the node centre where the stop line sits
+  crash?: Crash | null; // set = knocked off its footing and flying / lying dark
 }
 
 export interface Signals { approaches: Approach[]; byEdge: Map<number, Approach>; time: number }
@@ -75,6 +80,20 @@ export function buildSignals(city: City): Signals {
   return { approaches, byEdge: new Map(approaches.map((a) => [key(a.edge, city.edges[a.edge].b === a.node), a])), time: 0 };
 }
 
+/** Knocks a head off its footing: same ballistic step as a wrecked bike, then it lies there for good. */
+export function hitSignal(a: Approach, nx: number, nz: number, dv: number): void {
+  if (a.crash) return;
+  a.crash = makeCrash(a.heading, 0, POLE_MASS, nx, nz, dv);
+}
+
+/** Flies every knocked-down head one step; a settled one is left lying where it fell. */
+export function stepSignals(s: Signals, dt: number): void {
+  for (const a of s.approaches) if (a.crash) stepCrash(a, dt);
+}
+
+export const signalCircles = (s: Signals): Circle[] =>
+  s.approaches.map((a) => ({ x: a.x, z: a.z, r: a.crash ? 0 : POLE_RADIUS, mass: POLE_MASS }));
+
 export function aspect(s: Signals, a: Approach): Aspect {
   const t = (s.time + a.offset) % CYCLE;
   const local = (t + CYCLE - (a.group ? PHASE : 0)) % CYCLE;
@@ -88,6 +107,7 @@ export function aspect(s: Signals, a: Approach): Aspect {
 export function signalSpeed(s: Signals, a: Approach, remaining: number, speed: number, accel: number): number {
   const gap = remaining - a.line;
   if (gap < -OVER) return Infinity; // already over the line: clear the junction, don't stop in it
+  if (a.crash) return Infinity;     // lamp is on the pavement: nothing to obey
   const light = aspect(s, a);
   if (light === 'green') return Infinity;
   if (light === 'amber' && gap < (speed * speed) / (2 * accel)) return Infinity; // too late to pull up

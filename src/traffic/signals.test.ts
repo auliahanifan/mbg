@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { loadCity } from '../world/city';
-import { buildSignals, approachAt, aspect, signalSpeed, CYCLE } from './signals';
+import { buildSignals, approachAt, aspect, signalSpeed, hitSignal, signalCircles, stepSignals, CYCLE } from './signals';
 import { stepTraffic, type TrafficCar } from './traffic';
 
 // A 4-way cross of 8 m roads at the origin, arms 100 m long. Node 0 is the junction.
@@ -67,5 +67,21 @@ describe('signals', () => {
     s.time += CYCLE / 2; // the other axis's red is our green
     for (let i = 0; i < 100; i++) stepTraffic(city, [c], [], 0.05, () => 0, far, s);
     expect(c.edge).not.toBe(1);
+  });
+});
+
+describe('knocked-down signals', () => {
+  it('a hit head stops being solid, flies, goes dark to traffic, and stays down', () => {
+    const s = buildSignals(city);
+    const a = approachAt(s, 1, false)!;
+    const { x, z } = a;
+    hitSignal(a, 1, 0, 8);
+    expect(signalCircles(s).find((c) => c.r === 0)).toBeTruthy();
+    for (let i = 0; i < 300; i++) stepSignals(s, 1 / 60);
+    expect(a.x).toBeGreaterThan(x + 1);
+    expect(a.z).toBeCloseTo(z, 0);
+    expect(signalSpeed(s, a, 20, 10, 6)).toBe(Infinity);
+    hitSignal(a, -1, 0, 8); // a second nudge does not relaunch it
+    expect(a.crash!.vx).toBe(0);
   });
 });
