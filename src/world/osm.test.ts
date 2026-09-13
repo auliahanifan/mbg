@@ -80,8 +80,10 @@ describe('classify', () => {
     expect(hotel.h).toBeLessThanOrEqual(19.2);
     expect(classify({ building: 'mosque' }, SQ)).toEqual({ h: 4.8, r: 'dome' });
     expect(classify({ building: 'yes', amenity: 'place_of_worship' }, SQ).r).toBe('dome');
-    expect(classify({ building: 'yes', amenity: 'place_of_worship', religion: 'christian' }, SQ).r).toBeUndefined();
+    expect(classify({ building: 'yes', amenity: 'place_of_worship', religion: 'christian' }, SQ).r).toBe('gable'); // a church is a gabled hall
     expect(classify({ building: 'yes', name: 'Mushola Darul Hikmah' }, SQ).r).toBe('dome');
+    expect(classify({ building: 'church', religion: 'christian' }, SQ).r).toBe('gable');
+    expect(classify({ building: 'yes', name: 'Gedung Sekolah Minggu' }, SQ).r).not.toBe('dome'); // a church annex is just a building
   });
 });
 

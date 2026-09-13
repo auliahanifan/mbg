@@ -7,6 +7,8 @@ const FENCE = 0xbfb9ae; // pagar tembok plester
 const PAVING = 0xa6a29a; // halaman semen / paving block
 const HIP_ROOFS = [0xb8553a, 0xc4643f, 0x9e4a36, 0xcf7048, 0xb8553a, 0x3d3532, 0x6f7378, 0x4d6f86]; // genteng tanah liat, genteng glazur hitam, seng, galvalum biru
 const FLAT_ROOFS = [0x9d9c98, 0x8f918f, 0xa8a49d];
+const SIGNBOARDS = [0xd64541, 0x1c56a0, 0x1f7a3e, 0xf2c400, 0xf4f2ec, 0x1a1a1a, 0xe8862a]; // papan nama ruko: merah, biru, hijau, kuning, putih, hitam, oranye
+const BAND = 0.65; // the signboard band at the top of a ruko's ground floor (rukoTexture's top 26 px)
 const DOME = 0x3a9a68;
 const MINARET = 0xf2eee4;
 const WINDOW_W = 3; // metres per facade texture repeat (one window)
@@ -36,6 +38,24 @@ export function wallQuads(ring: [number, number][], h: number, y0 = 0, uPer = WI
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   return { positions, uvs, indices };
+}
+
+/** The ring pushed `d` metres outward at every vertex (along the mean of its two edge normals), whichever way it winds. */
+export function offsetRing(ring: [number, number][], d: number): [number, number][] {
+  const n = ring.length;
+  let a = 0;
+  for (let i = 0; i < n; i++) a += ring[i][0] * ring[(i + 1) % n][1] - ring[(i + 1) % n][0] * ring[i][1];
+  const s = a > 0 ? -1 : 1; // (−dz, dx) is the outward normal of a clockwise ring in x/z
+  return ring.map((p, i) => {
+    const q = ring[(i + n - 1) % n];
+    const r = ring[(i + 1) % n];
+    const l1 = Math.hypot(p[0] - q[0], p[1] - q[1]) || 1;
+    const l2 = Math.hypot(r[0] - p[0], r[1] - p[1]) || 1;
+    let nx = (-(p[1] - q[1]) / l1 - (r[1] - p[1]) / l2) * s;
+    let nz = ((p[0] - q[0]) / l1 + (r[0] - p[0]) / l2) * s;
+    const l = Math.hypot(nx, nz) || 1;
+    return [p[0] + (nx / l) * d, p[1] + (nz / l) * d];
+  });
 }
 
 /** Flat cap over the footprint at height y (earcut). */
@@ -267,6 +287,7 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
   const flat = batch();
   const yards = batch(); // own mesh: polygon-offset onto the terrain like the sidewalks
   const color = new THREE.Color();
+  const board = new THREE.Color(); // `wall` aliases `color`, so the band needs its own
   for (const b of buildings) {
     if (b.p.length < 3) continue;
     const seed = hash(b.p[0][0], b.p[0][1]);
@@ -277,6 +298,7 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     const isRuko = !b.r && b.h <= 3 * FLOOR && a <= 600;
     const groundBatch = b.r === 'hip' || b.r === 'gable' ? house : isRuko ? ruko : upper;
     push(groundBatch, wallQuads(b.p, Math.min(h, FLOOR + SINK), y0, groundBatch === house ? 3 * WINDOW_W : WINDOW_W), wall);
+    if (isRuko) push(flat, wallQuads(offsetRing(b.p, 0.04), BAND, y0 + FLOOR - BAND), board.setHex(SIGNBOARDS[(seed >>> 4) % SIGNBOARDS.length])); // its own signboard colour over the texture's red band
     if (h > FLOOR + SINK) push(upper, wallQuads(b.p, h - FLOOR - SINK, y0 + FLOOR + SINK), wall);
     const top = y0 + h;
     if (b.t) { // podium + tower: the tower's walls continue the upper-storey texture, its own flat cap on top

@@ -107,8 +107,10 @@ export function orientedBox(ring: [number, number][]): OrientedBox {
 const HOUSE = new Set(['yes', 'house', 'residential', 'detached', 'terrace', 'bungalow']);
 const RUKO = new Set(['commercial', 'retail', 'office', 'apartments']);
 const CIVIC = /^(school|kindergarten|college|university|public|government|industrial|warehouse|train_station|railway|garage|garages|parking|roof|church|chapel)$/;
+const isChurch = (t: Record<string, string>) =>
+  t.building === 'church' || t.building === 'chapel' || t.religion === 'christian' || /gereja|\bgk[ij]\b|katolik|kristen|church|katedral|paroki|santo|santa\b|sekolah minggu/i.test(t.name ?? '');
 const isMosque = (t: Record<string, string>) =>
-  t.building === 'mosque' || t.religion === 'muslim' || (t.amenity === 'place_of_worship' && !t.religion) || /masjid|musholl?a/i.test(t.name ?? '');
+  !isChurch(t) && (t.building === 'mosque' || t.religion === 'muslim' || (t.amenity === 'place_of_worship' && !t.religion) || /masjid|musholl?a/i.test(t.name ?? ''));
 
 /**
  * Real Purwokerto landmarks OSM leaves untagged: floors (and a tower for podium + tower blocks) by name.
@@ -137,6 +139,7 @@ export function classify(tags: Record<string, string>, ring: [number, number][])
   const height = parseFloat(tags.height ?? '');
   const explicit = height > 0 ? height : levels > 0 ? levels * FLOOR : 0;
   if (isMosque(tags)) return { h: round1(explicit || FLOOR * 1.5), r: 'dome' };
+  if (/^(church|chapel)$/.test(tags.building) || (isChurch(tags) && (tags.amenity === 'place_of_worship' || /gereja|church|\bgk[ij]\b/i.test(tags.name ?? '')))) return { h: round1(explicit || FLOOR * 2), r: 'gable' }; // a gabled hall, never a dome
   const a = area(ring);
   const b = tags.building;
   const tagged = !!(tags.shop || tags.amenity || tags.tourism || tags.office);

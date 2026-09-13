@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wallQuads, flatCap, hipRoof, towerRing, frontSide, fence, yard, pillars } from './buildings';
+import { wallQuads, flatCap, hipRoof, towerRing, frontSide, fence, yard, pillars, offsetRing } from './buildings';
 
 const ys = (p: number[]) => p.filter((_, i) => i % 3 === 1);
 
@@ -10,6 +10,16 @@ describe('wallQuads', () => {
     expect(g.indices).toHaveLength(4 * 6);
     expect(g.uvs!.slice(0, 8)).toEqual([0, 0, 2, 0, 2, 2, 0, 2]);
     expect(Math.max(...ys(g.positions))).toBe(6.4);
+  });
+});
+
+describe('offsetRing', () => {
+  it('grows a square outward by d whichever way it winds', () => {
+    const cw: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]];
+    const r = Math.SQRT1_2; // along the corner bisector, d from the corner
+    const out = [[-r, -r], [10 + r, -r], [10 + r, 10 + r], [-r, 10 + r]];
+    offsetRing(cw, 1).forEach(([x, z], i) => { expect(x).toBeCloseTo(out[i][0]); expect(z).toBeCloseTo(out[i][1]); });
+    offsetRing([...cw].reverse(), 1).forEach(([x, z], i) => { expect(x).toBeCloseTo(out[3 - i][0]); expect(z).toBeCloseTo(out[3 - i][1]); });
   });
 });
 
