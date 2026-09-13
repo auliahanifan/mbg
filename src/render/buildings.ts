@@ -339,8 +339,9 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     const box = orientedBox(b.p);
     const front = frontSide(box, roadEscape);
     // Every flat-roofed block up to 3 storeys standing on a street in Purwokerto is a ruko row, however long its
-    // footprint: shopfront, papan nama, kanopi over the trotoar. Only the deep ones (malls, hospitals) stay plain.
-    const isRuko = !b.r && b.h <= 3 * FLOOR && !!front && box.short <= 40;
+    // footprint: shopfront, papan nama, kanopi over the trotoar. Buildings OSM calls a school, hospital, office or
+    // place of worship are exempt — they are not shops — and so are the deep blocks (malls, halls).
+    const isRuko = !b.r && !b.civic && b.h <= 3 * FLOOR && !!front && box.short <= 40;
     const groundBatch = b.r === 'hip' || b.r === 'gable' || b.r === 'joglo' ? house : isRuko ? ruko : upper;
     push(groundBatch, wallQuads(b.p, Math.min(h, FLOOR + SINK), y0, groundBatch === house ? 3 * WINDOW_W : WINDOW_W), wall);
     if (isRuko) {

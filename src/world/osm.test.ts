@@ -17,14 +17,19 @@ describe('project', () => {
 });
 
 describe('widthOf', () => {
-  it('classifies highways and skips footways', () => {
-    expect(widthOf('primary')).toBe(12);
-    expect(widthOf('primary_link')).toBe(12);
-    expect(widthOf('residential')).toBe(6);
-    expect(widthOf('service')).toBe(4);
-    expect(widthOf('road')).toBe(6);
-    expect(widthOf('footway')).toBeNull();
-    expect(widthOf('steps')).toBeNull();
+  it('falls back to the per-class table when the map says nothing', () => {
+    expect(widthOf({ highway: 'primary' })).toBe(12);
+    expect(widthOf({ highway: 'primary_link' })).toBe(12);
+    expect(widthOf({ highway: 'residential' })).toBe(6);
+    expect(widthOf({ highway: 'service' })).toBe(4);
+    expect(widthOf({ highway: 'road' })).toBe(6);
+    expect(widthOf({ highway: 'footway' })).toBeNull();
+  });
+  it('prefers what OSM actually mapped: width, then lanes', () => {
+    expect(widthOf({ highway: 'primary', lanes: '4' })).toBe(13);
+    expect(widthOf({ highway: 'residential', lanes: '1' })).toBe(3.3);
+    expect(widthOf({ highway: 'secondary', lanes: '2', width: '9.5' })).toBe(9.5); // an explicit width outranks the lane count
+    expect(widthOf({ highway: 'footway', lanes: '2' })).toBeNull(); // still not a carriageway
   });
 });
 

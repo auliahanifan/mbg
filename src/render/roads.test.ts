@@ -59,16 +59,22 @@ describe('polePoints', () => {
 describe('gapuraSpots', () => {
   const city = () => loadCity({
     nodes: [[0, 0], [100, 0], [50, 0], [50, 40], [50, 6]], // a wide road west→east, a gang running north off its middle
-    ways: [{ n: [0, 2, 1], w: 10 }, { n: [2, 3], w: 6 }, { n: [2, 4], w: 6 }],
+    ways: [{ n: [0, 2, 1], w: 10 }, { n: [2, 3], w: 6, name: 'Gang Mawar' }, { n: [2, 4], w: 6, name: 'Gang Melati' }],
     buildings: [], pois: [],
   });
-  it('stands one portal per gang mouth, 6 m in, straddling the gang', () => {
+  it('stands one portal per gang mouth, 5 m in, straddling the gang', () => {
     const s = gapuraSpots(city());
     expect(s).toHaveLength(1); // the second gang shares the mouth node, and its 6 m stub is too short anyway
-    expect(s[0]).toMatchObject({ x: 50, z: 6, half: 3.7 });
+    expect(s[0]).toMatchObject({ x: 50, z: 5, half: 3.7 });
     expect(s[0].heading).toBeCloseTo(0); // heading 0 points along +z, into the gang
   });
   it('ignores a gang that never meets a wide road', () => {
-    expect(gapuraSpots(loadCity({ nodes: [[0, 0], [0, 40]], ways: [{ n: [0, 1], w: 6 }], buildings: [], pois: [] }))).toHaveLength(0);
+    expect(gapuraSpots(loadCity({ nodes: [[0, 0], [0, 40]], ways: [{ n: [0, 1], w: 6, name: 'Gang Mawar' }], buildings: [], pois: [] }))).toHaveLength(0);
+  });
+  it('only stands one where OSM names the lane a gang', () => {
+    const off = (name?: string) => loadCity({ nodes: [[0, 0], [100, 0], [50, 0], [50, 40]], ways: [{ n: [0, 2, 1], w: 10 }, { n: [2, 3], w: 6, ...(name && { name }) }], buildings: [], pois: [] });
+    expect(gapuraSpots(off())).toHaveLength(0); // unnamed stub
+    expect(gapuraSpots(off('Jalan Penjara'))).toHaveLength(0); // a named street is not a gang
+    expect(gapuraSpots(off('Gg. Melati'))).toHaveLength(1);
   });
 });

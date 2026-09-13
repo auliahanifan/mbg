@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createScene, START_HOUR } from './render/scene';
 import { createPost } from './render/post';
-import { buildGapura, buildPoles, buildRoads, buildStalls } from './render/roads';
+import { buildGapura, buildPoles, buildRoads, buildStalls, streetTrees } from './render/roads';
 import { buildBuildings } from './render/buildings';
 import { buildLandmarks } from './render/landmarks';
 import { buildSigns } from './render/signs';
@@ -37,6 +37,7 @@ data.buildings = clearRoads(data); // footprints off the asphalt, before anythin
 const ground = makeGround(dem);
 const probe = corridorEscape(data);
 const roadEscape = (x: number, z: number) => probe(x, z, -5); // road within 5 m of the probe → pagar in front of the house
+data.trees = [...(data.trees ?? []), ...streetTrees(city, (x, z) => probe(x, z) !== null)]; // peneduh on every kerb, before the ground and the occupancy grid read the tree list
 ctx.scene.add(buildGround(ground, data.areas ?? [], data.buildings), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildGapura(city, ground), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
 const signals = buildSignals(city);
 const occupancy = rasterize(data.buildings, data.trees ?? []);

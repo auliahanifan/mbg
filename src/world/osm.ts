@@ -28,8 +28,8 @@ export type AreaKind = 'grass' | 'wood' | 'farm' | 'water' | 'sand' | 'paved';
 export type LineKind = 'rail' | 'river' | 'stream';
 export interface CityData {
   nodes: [number, number][];
-  ways: { n: number[]; w: number; name?: string }[];
-  buildings: { p: [number, number][]; h: number; r?: Roof; t?: number; name?: string }[]; // t: tower rising above the roof (podium + tower blocks)
+  ways: { n: number[]; w: number; name?: string; one?: 1 }[]; // one: OSM oneway, so no centre line down it
+  buildings: { p: [number, number][]; h: number; r?: Roof; t?: number; name?: string; civic?: 1 }[]; // t: tower rising above the roof (podium + tower blocks); civic: OSM says school/hospital/office/worship, so never a shopfront
   pois: CityPoi[];
   areas?: { p: [number, number][]; k: AreaKind }[]; // closed landuse / water rings
   lines?: { p: [number, number][]; k: LineKind }[]; // rail and waterways
@@ -55,9 +55,18 @@ const SKIP = new Set(['footway', 'path', 'steps', 'cycleway', 'track', 'pedestri
 const WIDTHS: Record<string, number> = {
   motorway: 12, trunk: 12, primary: 12, secondary: 10, tertiary: 8, residential: 6, unclassified: 6, service: 4, living_street: 4,
 };
-export function widthOf(highway: string): number | null {
-  if (SKIP.has(highway)) return null;
-  return WIDTHS[highway.replace(/_link$/, '')] ?? 6;
+const LANE = 3.25; // metres of carriageway per marked lane
+/**
+ * Carriageway width in metres. OSM's own `width` wins, then `lanes` × LANE (180 of Purwokerto's ways carry it); only
+ * where the map says nothing does the per-class table stand in. Null for the ways no car drives on.
+ */
+export function widthOf(tags: Record<string, string>): number | null {
+  if (SKIP.has(tags.highway)) return null;
+  const width = parseFloat(tags.width ?? '');
+  if (width > 0) return round1(width);
+  const lanes = parseInt(tags.lanes ?? '', 10);
+  if (lanes > 0) return round1(lanes * LANE);
+  return WIDTHS[tags.highway.replace(/_link$/, '')] ?? 6;
 }
 
 export const hash = (x: number, z: number) => ((Math.round(x * 10) * 73856093) ^ (Math.round(z * 10) * 19349663)) >>> 0;
@@ -124,9 +133,7 @@ const KNOWN: [RegExp, { floors: number; r?: Roof; t?: number }][] = [
   [/^kantor bupati banyumas/i, { floors: 3, r: 'hip' }],
   [/baitussalam/i, { floors: 3, r: 'dome' }],
   [/^museum bank rakyat/i, { floors: 2, r: 'hip' }],
-  [/^pendopo si panji/i, { floors: 1, r: 'joglo' }], // the open Banyumas pavilion on the Alun-alun: one storey under a tiered joglo
-  [/^aston imperium/i, { floors: 12 }], // the tall hotel on Jl. Overste Isdiman
-  [/^pasar wage$/i, { floors: 3 }], // rebuilt 2021 as a multi-storey market
+  [/^pendopo si panji/i, { floors: 1, r: 'joglo' }], // OSM has it only as a node, but that node falls inside a footprint: the open Banyumas pavilion under its tiered joglo
 ];
 
 /**
@@ -134,7 +141,7 @@ const KNOWN: [RegExp, { floors: number; r?: Roof; t?: number }][] = [
  * small plain footprints are 1–2 storey houses under a genteng limasan (hip) or pelana (gable) roof, tagged shops/offices 2–3 storey flat ruko,
  * hotels 4–6, mall/hospital 3–4, civic 1–2, mosques 4.8 m with a dome.
  */
-export function classify(tags: Record<string, string>, ring: [number, number][]): { h: number; r?: Roof; t?: number } {
+export function classify(tags: Record<string, string>, ring: [number, number][]): { h: number; r?: Roof; t?: number; civic?: 1 } {
   const rnd = hash(ring[0][0], ring[0][1]) % 100;
   const known = KNOWN.find(([re]) => re.test(tags.name ?? ''))?.[1];
   if (known) return { h: round1(known.floors * FLOOR), ...(known.r && { r: known.r }), ...(known.t && { t: round1(known.t) }) };
@@ -152,13 +159,17 @@ export function classify(tags: Record<string, string>, ring: [number, number][])
     const pitched = ring.length <= 8 && box.short <= 18 && a >= 0.7 * box.long * box.short;
     return pitched ? { h, r: rnd % 5 < 2 ? 'gable' : 'hip' } : { h };
   }
+  // what OSM actually calls this building decides whether it may wear a shopfront
+  const civic = CIVIC.test(b) || /^(school|kindergarten|college|university|hospital|clinic|doctors|place_of_worship|townhall|police|fire_station|courthouse|prison|library|post_office|bus_station)$/.test(tags.amenity ?? '') || !!tags.office || !!tags.healthcare
+    ? ({ civic: 1 } as const)
+    : {};
   let floors: number;
   if (tags.tourism === 'hotel') floors = 4 + (rnd % 3);
   else if (tags.shop === 'mall' || b === 'hospital' || tags.amenity === 'hospital') floors = 3 + (rnd % 2);
   else if (CIVIC.test(b) || /school|kindergarten|college|university/.test(tags.amenity ?? '')) floors = 1 + (rnd % 2);
   else if (tagged || RUKO.has(b)) floors = 2 + (rnd % 2);
   else floors = 1 + (rnd % 2);
-  return { h: round1(explicit || floors * FLOOR) };
+  return { h: round1(explicit || floors * FLOOR), ...civic };
 }
 
 export function areaKind(t: Record<string, string>): AreaKind | null {
@@ -242,13 +253,16 @@ export function propagateNames(nodes: [number, number][], ways: CityData['ways']
 
 /**
  * Names from standalone POI nodes (the way most Indonesian shops, banks and warung are actually mapped) onto the
- * building they stand in, or failing that the nearest footprint within REACH metres. A building keeps a name it
- * already had; each POI claims at most one building, so a strip of shops names a strip of ruko.
+ * building they stand in, or failing that the nearest footprint within REACH metres. REACH is deliberately short: a
+ * node inside a footprint, or a shopfront node a few metres off its wall, identifies its building; past that the
+ * nearest footprint is a guess, and an unnamed building beats a wrongly named one. Of Purwokerto's 164 named POI
+ * nodes, 106 fall inside a footprint and 16 more within REACH; the rest stay unnamed.
+ * A building keeps a name it already had; each POI claims at most one building.
  */
 export function nameFromPois(buildings: CityData['buildings'], pois: { x: number; z: number; name: string }[]): void {
   const taken = new Set<number>();
   const centre = buildings.map((b) => [b.p.reduce((s, p) => s + p[0], 0) / b.p.length, b.p.reduce((s, p) => s + p[1], 0) / b.p.length] as const);
-  const REACH = 30;
+  const REACH = 12;
   for (const poi of pois) {
     let best = -1;
     let bestDist = REACH;
@@ -301,9 +315,10 @@ export function buildCityData(elements: OsmElement[]): CityData {
     const closed = e.nodes.length >= 4 && e.nodes[0] === e.nodes[e.nodes.length - 1];
     const ring = () => e.nodes.slice(0, -1).map((id) => project(...latLon.get(id)!));
     if (e.tags.highway) {
-      const w = widthOf(e.tags.highway);
+      const w = widthOf(e.tags);
       if (w === null || e.nodes.length < 2) continue;
       const way: CityData['ways'][number] = { n: e.nodes.map(nodeIndex), w };
+      if (/^(yes|1|-1)$/.test(e.tags.oneway ?? '')) way.one = 1;
       const name = e.tags.name ?? e.tags.alt_name ?? e.tags.official_name;
       if (name) way.name = name;
       ways.push(way);

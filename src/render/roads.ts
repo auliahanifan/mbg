@@ -119,7 +119,7 @@ export function buildRoads(city: City, ground: Ground = FLAT): THREE.Group {
     const pts = densify(way.n.map((i) => nodes[i]), 10);
     sidewalk.push(ribbon(pts, way.w + SIDEWALK_EXTRA, Yg.sidewalk));
     asphalt.push(ribbon(pts, way.w, Yg.asphalt));
-    if (way.w >= 6) marking.push(...dashes(pts, way.w, Yg.marking));
+    if (way.w >= 6 && !way.one) marking.push(...dashes(pts, way.w, Yg.marking)); // a one-way carriageway has no centre line to divide
     for (const n of [way.n[0], way.n[way.n.length - 1]]) endRadius.set(n, Math.max(endRadius.get(n) ?? 0, way.w / 2));
   }
   for (const [n, r] of endRadius) {
@@ -245,24 +245,45 @@ export function buildStalls(city: City, ground: Ground = FLAT, blocked: (x: numb
   return g;
 }
 
-const GAPURA_H = 4.6; // underside of the lintel: a gang portal has to clear a pickup
-const GAPURA_IN = 6; // metres in from the mouth, past the bigger road's kerb
+const TREE_EVERY = 26; // trembesi/angsana spacing along a Purwokerto kerb
 
 /**
- * Mouths of the gangs: the end of every road ≤ 6 m wide that meets a road ≥ 8 m wide. Returns the portal's centre
+ * Peneduh along both kerbs of the main roads (≥ 8 m, the ones Purwokerto actually plants), TREE_EVERY metres apart and
+ * 1.8 m past the asphalt — outside the 1.2 m sidewalk, so they line the street without standing in it. A 6 m gang gets
+ * none: a trembesi crown is wider than the gang. `blocked` drops spots on another carriageway.
+ */
+export function streetTrees(city: City, blocked: (x: number, z: number) => boolean = () => false): [number, number][] {
+  const { nodes, ways } = city.data;
+  const out: [number, number][] = [];
+  for (const way of ways) {
+    if (way.w < 8) continue;
+    const pts = way.n.map((i) => nodes[i]);
+    for (const side of [pts, [...pts].reverse()]) for (const p of polePoints(side, way.w / 2, TREE_EVERY, 1.8)) if (!blocked(p[0], p[1])) out.push(p);
+  }
+  return out;
+}
+
+const GANG = /^(gang|gg\.?)\s/i; // OSM's own name for a kampung lane — the only evidence the map gives that a gapura belongs here
+const GAPURA_H = 4.6; // underside of the lintel: a gang portal has to clear a pickup
+const GAPURA_IN = 5; // metres in from the mouth, past the bigger road's kerb
+
+/**
+ * Mouths of the gangs: the end of every way OSM actually names "Gang …" where it meets a wider road. OSM does not map
+ * gapura themselves, so the portal is ambience — but the map does say which lanes are gang, and that is the only place
+ * one is put, rather than over every narrow street (28 of them in Purwokerto). Returns the portal's centre
  * GAPURA_IN metres into the small road, its heading along that road, and the half-width it has to straddle.
  */
 export function gapuraSpots(city: City): { x: number; z: number; heading: number; half: number }[] {
   const { nodes, ways } = city.data;
-  const wideAt = new Map<number, boolean>();
-  for (const w of ways) if (w.w >= 8) for (const n of w.n) wideAt.set(n, true);
+  const widest = new Map<number, number>();
+  for (const w of ways) for (const n of w.n) widest.set(n, Math.max(widest.get(n) ?? 0, w.w));
   const out: { x: number; z: number; heading: number; half: number }[] = [];
   const seen = new Set<number>();
   for (const way of ways) {
-    if (way.w > 6 || way.n.length < 2) continue;
+    if (way.n.length < 2 || !GANG.test(way.name ?? '')) continue;
     for (const [end, next] of [[0, 1], [way.n.length - 1, way.n.length - 2]] as const) {
       const node = way.n[end];
-      if (!wideAt.get(node) || seen.has(node)) continue;
+      if ((widest.get(node) ?? 0) <= way.w || seen.has(node)) continue; // the mouth is where the gang meets something wider than itself
       const [ax, az] = nodes[node];
       const [bx, bz] = nodes[way.n[next]];
       const l = Math.hypot(bx - ax, bz - az);
