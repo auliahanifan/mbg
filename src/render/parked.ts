@@ -14,7 +14,7 @@ const SHARE = 0.45; // of candidate spots that get a bike: ruko streets are line
  * right behind the kerb and `blocked` says the spot is not another carriageway. One InstancedMesh per material bucket
  * of a riderless BeAT, coloured per instance.
  */
-export function buildParkedBikes(city: City, ground: Ground = FLAT, blocked: (x: number, z: number) => boolean = () => false, shopfront: (x: number, z: number) => boolean = () => true): THREE.Group {
+export function buildParkedBikes(city: City, ground: Ground = FLAT, blocked: (x: number, z: number) => boolean = () => false, shopfront: (x: number, z: number) => boolean = () => true): { group: THREE.Group; spots: [number, number][] } {
   const { nodes, ways } = city.data;
   const spots: [number, number, number][] = [];
   for (const way of ways) {
@@ -36,7 +36,8 @@ export function buildParkedBikes(city: City, ground: Ground = FLAT, blocked: (x:
     }
   }
   const g = new THREE.Group();
-  if (!spots.length) return g;
+  const out = { group: g, spots: spots.map(([x, z]): [number, number] => [x, z]) };
+  if (!spots.length) return out;
   const o = new THREE.Object3D();
   const c = new THREE.Color();
   buildVehicle('beat', () => 0.5, true).children.forEach((part, k) => {
@@ -51,5 +52,5 @@ export function buildParkedBikes(city: City, ground: Ground = FLAT, blocked: (x:
     mesh.castShadow = true;
     g.add(mesh);
   });
-  return g;
+  return out;
 }

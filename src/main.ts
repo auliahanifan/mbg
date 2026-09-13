@@ -11,7 +11,7 @@ import { makeGround, grade, GRAVITY, type Dem } from './world/terrain';
 import { loadCity, nearestEdge, pointOnEdge } from './world/city';
 import { clearRoads, corridorEscape, project, SPAWN, type CityData } from './world/osm';
 import { routeLength } from './world/routing';
-import { rasterize, boxesAround } from './vehicle/occupancy';
+import { rasterize, boxesAround, occupy } from './vehicle/occupancy';
 import { stepCar, type CarState } from './vehicle/carPhysics';
 import { resolveCar } from './vehicle/collision';
 import { createPlayerCar } from './vehicle/playerCar';
@@ -41,7 +41,9 @@ ctx.scene.add(buildGround(ground, data.areas ?? []), buildTerrain(data, ground),
 const signals = buildSignals(city);
 const occupancy = rasterize(data.buildings, [...(data.trees ?? []), ...signals.approaches.map((a): [number, number] => [a.x, a.z])]); // signal poles are solid too
 ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
-ctx.scene.add(buildParkedBikes(city, ground, (x, z) => probe(x, z, 0.6) !== null || boxesAround(occupancy, x, z, 0.3).length > 4, (x, z) => boxesAround(occupancy, x, z, 2.5).length > 4)); // on the sidewalk, in front of a building
+const parked = buildParkedBikes(city, ground, (x, z) => probe(x, z, 0.6) !== null || boxesAround(occupancy, x, z, 0.3).length > 4, (x, z) => boxesAround(occupancy, x, z, 2.5).length > 4); // on the sidewalk, in front of a building
+ctx.scene.add(parked.group);
+for (const [x, z] of parked.spots) occupy(occupancy, x, z); // mount the kerb and you hit them
 const player = await createPlayerCar(ctx.scene);
 const chase = createChaseCamera(ctx, ground);
 

@@ -28,6 +28,13 @@ export function rasterize(buildings: { p: [number, number][] }[], trees: [number
   return gridFromImage(g.getImageData(0, 0, size, size).data, size, origin);
 }
 
+/** Marks the cell under (x, z) solid: for things placed after the grid was rasterised. */
+export function occupy(o: Occupancy, x: number, z: number): void {
+  const i = Math.floor(x - o.origin);
+  const j = Math.floor(z - o.origin);
+  if (i >= 0 && j >= 0 && i < o.size && j < o.size) o.cells[j * o.size + i] = 1;
+}
+
 /** 1x1 boxes for occupied cells within r of (x, z), plus four walls hemming in the whole grid. */
 export function boxesAround(o: Occupancy, x: number, z: number, r = 3): Box[] {
   const lo = o.origin;

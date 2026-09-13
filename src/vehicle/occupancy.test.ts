@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gridFromImage, boxesAround } from './occupancy';
+import { gridFromImage, boxesAround, occupy } from './occupancy';
 
 // 4x4 grid, origin -2: only cell (2,1) (x∈[0,1), z∈[-1,0)) is filled
 const rgba = new Uint8ClampedArray(4 * 4 * 4);
@@ -16,6 +16,13 @@ describe('occupancy', () => {
     expect(boxes).toContainEqual({ minX: 0, maxX: 1, minZ: -1, maxZ: 0 });
     expect(boxes).toHaveLength(5);
     expect(boxesAround(occ, 1.5, 1.5, 0.4)).toHaveLength(4); // walls only
+  });
+  it('occupy marks one more cell and ignores points off the grid', () => {
+    const o = gridFromImage(new Uint8ClampedArray(4 * 4 * 4), 4, -2);
+    occupy(o, 1.5, 1.5);
+    occupy(o, 50, 50);
+    expect(boxesAround(o, 1.5, 1.5, 0.4)).toContainEqual({ minX: 1, maxX: 2, minZ: 1, maxZ: 2 });
+    expect(Array.from(o.cells).reduce((a, b) => a + b, 0)).toBe(1);
   });
   it('walls sit just outside the grid', () => {
     const walls = boxesAround(occ, 100, 100, 1);
