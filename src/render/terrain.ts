@@ -7,6 +7,8 @@ const AREA: Record<NonNullable<CityData['areas']>[number]['k'], string> = {
   grass: '#647f3a', wood: '#46612e', farm: '#8c9a4c', water: '#4f6f72', sand: '#b3a47c', paved: '#7d7c78',
 };
 const SOIL = '#6a6b44';
+const BUILT = '#8b8274'; // tanah padat / plester / paving of the kampung floor: what actually lies between Purwokerto's buildings
+const APRON = 14; // metres of built-up floor painted around every footprint (stroked, so half either side)
 const Y = { water: 0.015, ballast: 0.045, rail: 0.09 };
 const GAUGE = 1.067; // Indonesian narrow gauge
 const TEX_PX = 1700; // 2 m per texel over the ±HALF_SIZE map
@@ -17,7 +19,7 @@ function mat(color: number, offset: number): THREE.MeshStandardMaterial {
 }
 
 /** Land-use polygons painted over mottled soil, 2 m per texel; the ground mesh wears it so areas follow the terrain. */
-function groundTexture(areas: NonNullable<CityData['areas']>): THREE.CanvasTexture {
+function groundTexture(areas: NonNullable<CityData['areas']>, buildings: CityData['buildings']): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = TEX_PX;
   const g = c.getContext('2d')!;
@@ -30,6 +32,18 @@ function groundTexture(areas: NonNullable<CityData['areas']>): THREE.CanvasTextu
     g.beginPath();
     a.p.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z)));
     g.fill();
+  }
+  // Built-up floor: every footprint plus an APRON-wide apron. Grass survives only where nothing is built — parks,
+  // sawah, lapangan — which is how a Javanese town actually reads from the street.
+  g.fillStyle = g.strokeStyle = BUILT;
+  g.lineWidth = APRON;
+  g.lineJoin = 'round';
+  for (const b of buildings) {
+    g.beginPath();
+    b.p.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z)));
+    g.closePath();
+    g.fill();
+    g.stroke();
   }
   g.globalAlpha = 0.14; // mottle so the soil and grass are not flat colour
   for (let i = 0; i < 160000; i++) {
@@ -47,7 +61,7 @@ function groundTexture(areas: NonNullable<CityData['areas']>): THREE.CanvasTextu
 }
 
 /** Heightfield on the DEM grid (cells split along the (i, j)→(i+1, j+1) diagonal like mdplAt) extended flat past the map edge. */
-export function buildGround(ground: Ground, areas: NonNullable<CityData['areas']>): THREE.Mesh {
+export function buildGround(ground: Ground, areas: NonNullable<CityData['areas']>, buildings: CityData['buildings'] = []): THREE.Mesh {
   const step = ground.dem.step;
   const n = Math.round((2 * SKIRT) / step) + 1;
   const positions: number[] = [];
@@ -71,7 +85,7 @@ export function buildGround(ground: Ground, areas: NonNullable<CityData['areas']
   geo.setIndex(indices);
   geo.computeVertexNormals();
   const detail = grimeTexture();
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: groundTexture(areas), roughness: 1 }));
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: groundTexture(areas, buildings), roughness: 1 }));
   // ponytail: second UV set + aoMap as a cheap close-range detail layer; a real detail-map shader chunk if it ever needs to be stronger
   geo.setAttribute('uv1', new THREE.BufferAttribute(new Float32Array(Array.from({ length: positions.length / 3 }, (_, i) => [positions[3 * i] / 9, positions[3 * i + 2] / 9]).flat()), 2));
   (m.material as THREE.MeshStandardMaterial).aoMap = detail;

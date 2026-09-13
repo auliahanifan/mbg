@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wallQuads, flatCap, hipRoof, towerRing, frontSide, fence, yard, pillars, offsetRing } from './buildings';
+import { wallQuads, flatCap, hipRoof, towerRing, frontSide, fence, yard, pillars, offsetRing, bandUnits, canopy } from './buildings';
 
 const ys = (p: number[]) => p.filter((_, i) => i % 3 === 1);
 
@@ -101,5 +101,24 @@ describe('frontSide + fence + yard + pillars', () => {
     const pz = p.positions.filter((_, i) => i % 3 === 2);
     expect(Math.min(...pz)).toBeCloseTo(4.6 - 0.11);
     expect(Math.max(...p.positions.filter((_, i) => i % 3 === 1))).toBe(2.2);
+  });
+});
+
+describe('bandUnits', () => {
+  it('splits every edge into ~5.5 m shop units, each with its own seed', () => {
+    const units = bandUnits([[0, 0], [22, 0], [22, 5.5], [0, 5.5]], 0.65, 3);
+    expect(units).toHaveLength(4 + 1 + 4 + 1); // 22 m → 4 units, 5.5 m → 1
+    expect(new Set(units.map((u) => u.seed)).size).toBe(units.length);
+    expect(units[0].geo.positions).toEqual([0, 3, 0, 5.5, 3, 0, 5.5, 3.65, 0, 0, 3.65, 0]);
+  });
+});
+
+describe('canopy', () => {
+  it('slopes from the wall down to a lipped outer edge, never past the kerb', () => {
+    const g = canopy({ fx: 0, fz: 4, tx: 1, tz: 0, half: 5, nx: 0, nz: 1, off: 1.5 }, 3.2);
+    const zs = g.positions.filter((_, i) => i % 3 === 2);
+    expect(Math.max(...zs)).toBeCloseTo(4); // the lip stops at the kerb line, not beyond it
+    expect(Math.min(...zs)).toBeCloseTo(2.5); // the wall
+    expect(Math.min(...ys(g.positions))).toBeCloseTo(3.2 - 0.35 - 0.18);
   });
 });

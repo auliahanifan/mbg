@@ -8,7 +8,9 @@ const PAVING = 0xa6a29a; // halaman semen / paving block
 const HIP_ROOFS = [0xb8553a, 0xc4643f, 0x9e4a36, 0xcf7048, 0xb8553a, 0x3d3532, 0x6f7378, 0x4d6f86]; // genteng tanah liat, genteng glazur hitam, seng, galvalum biru
 const FLAT_ROOFS = [0x9d9c98, 0x8f918f, 0xa8a49d];
 const SIGNBOARDS = [0xd64541, 0x1c56a0, 0x1f7a3e, 0xf2c400, 0xf4f2ec, 0x1a1a1a, 0xe8862a]; // papan nama ruko: merah, biru, hijau, kuning, putih, hitam, oranye
+const UNIT = 5.5; // metres of shopfront per ruko unit: the module a Purwokerto row is actually built in
 const BAND = 0.65; // the signboard band at the top of a ruko's ground floor (rukoTexture's top 26 px)
+const CANOPY = 0x8e9297; // seng gelombang / cor kanopi over the shopfront
 const DOME = 0x3a9a68;
 const MINARET = 0xf2eee4;
 const WINDOW_W = 3; // metres per facade texture repeat (one window)
@@ -115,6 +117,28 @@ function slab(a: [number, number], b: [number, number], thick: number, y0: numbe
   return { positions: [...w.positions, ...cap.positions], uvs: [...w.uvs!, 0, 0, 0, 0, 0, 0, 0, 0], indices: [...w.indices, ...cap.indices.map((i) => i + 16)] };
 }
 
+/**
+ * The papan nama band split into ~UNIT-wide shop units along every edge of the ring, each carrying its own hash so a
+ * long block reads as the patchwork row of separately-painted shops it is, not one continuous board.
+ */
+export function bandUnits(ring: [number, number][], h: number, y0: number): { geo: Geo; seed: number }[] {
+  const out: { geo: Geo; seed: number }[] = [];
+  for (let i = 0; i < ring.length; i++) {
+    const [ax, az] = ring[i];
+    const [bx, bz] = ring[(i + 1) % ring.length];
+    const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / UNIT));
+    for (let k = 0; k < n; k++) {
+      const [x0, z0] = [ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n];
+      const [x1, z1] = [ax + ((bx - ax) * (k + 1)) / n, az + ((bz - az) * (k + 1)) / n];
+      out.push({
+        geo: { positions: [x0, y0, z0, x1, y0, z1, x1, y0 + h, z1, x0, y0 + h, z0], indices: [0, 1, 2, 0, 2, 3] },
+        seed: hash(x0, z0),
+      });
+    }
+  }
+  return out;
+}
+
 export type Front = { fx: number; fz: number; tx: number; tz: number; half: number; nx: number; nz: number; off: number };
 
 /**
@@ -164,6 +188,20 @@ export function yard(f: Front, y: (x: number, z: number) => number): Geo {
   const kerb = (t: number): [number, number] => [f.fx + f.tx * t, f.fz + f.tz * t];
   const ring = [wall(-f.half), wall(f.half), kerb(f.half), kerb(-f.half)];
   return { positions: ring.flatMap(([x, z]) => [x, y(x, z) + 0.12, z]), indices: [0, 1, 2, 0, 2, 3] };
+}
+
+/**
+ * Kanopi ruko: the cantilevered slab every Purwokerto shophouse hangs over the trotoar, starting above the signboard
+ * at the wall and sloping 0.35 m down to its outer lip, plus a thin fascia so it reads as a slab and not a plane.
+ */
+export function canopy(f: Front, yWall: number): Geo {
+  const d = Math.min(f.off, 2.6);
+  const at = (t: number, out: number): [number, number] => [f.fx + f.tx * t - f.nx * (f.off - out), f.fz + f.tz * t - f.nz * (f.off - out)];
+  const [a, b, c, e] = [at(-f.half, 0), at(f.half, 0), at(f.half, d), at(-f.half, d)];
+  const yLip = yWall - 0.35;
+  const p = (q: [number, number], y: number) => [q[0], y, q[1]];
+  const positions = [...p(a, yWall), ...p(b, yWall), ...p(c, yLip), ...p(e, yLip), ...p(c, yLip - 0.18), ...p(e, yLip - 0.18)];
+  return { positions, indices: [0, 1, 2, 0, 2, 3, 2, 4, 5, 2, 5, 3] };
 }
 
 /** Teras: three 0.22 m square pillars 1.6 m in front of the wall, holding up the emper roof (y0 → yTop). */
@@ -295,19 +333,25 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     const h = b.h + SINK;
     const a = area(b.p);
     const wall = color.setHex(WALLS[seed % WALLS.length]);
-    const isRuko = !b.r && b.h <= 3 * FLOOR && a <= 600;
+    const box = orientedBox(b.p);
+    const front = frontSide(box, roadEscape);
+    // Every flat-roofed block up to 3 storeys standing on a street in Purwokerto is a ruko row, however long its
+    // footprint: shopfront, papan nama, kanopi over the trotoar. Only the deep ones (malls, hospitals) stay plain.
+    const isRuko = !b.r && b.h <= 3 * FLOOR && !!front && box.short <= 40;
     const groundBatch = b.r === 'hip' || b.r === 'gable' ? house : isRuko ? ruko : upper;
     push(groundBatch, wallQuads(b.p, Math.min(h, FLOOR + SINK), y0, groundBatch === house ? 3 * WINDOW_W : WINDOW_W), wall);
-    if (isRuko) push(flat, wallQuads(offsetRing(b.p, 0.04), BAND, y0 + FLOOR - BAND), board.setHex(SIGNBOARDS[(seed >>> 4) % SIGNBOARDS.length])); // its own signboard colour over the texture's red band
+    if (isRuko) {
+      for (const u of bandUnits(offsetRing(b.p, 0.04), BAND, y0 + FLOOR - BAND)) push(flat, u.geo, board.setHex(SIGNBOARDS[u.seed % SIGNBOARDS.length])); // a colour per shop unit over the texture's red band
+      if (front!.off >= 1.2) push(flat, canopy(front!, y0 + FLOOR + SINK), color.setHex(CANOPY));
+    }
     if (h > FLOOR + SINK) push(upper, wallQuads(b.p, h - FLOOR - SINK, y0 + FLOOR + SINK), wall);
     const top = y0 + h;
     if (b.t) { // podium + tower: the tower's walls continue the upper-storey texture, its own flat cap on top
-      const ring = towerRing(orientedBox(b.p));
+      const ring = towerRing(box);
       push(upper, wallQuads(ring, b.t, top), wall);
       push(flat, flatCap(ring, top + b.t), color.setHex(FLAT_ROOFS[(seed >>> 8) % FLAT_ROOFS.length]));
     }
     if (b.r === 'hip' || b.r === 'gable') {
-      const box = orientedBox(b.p);
       const roof = hipRoof(box, top, Math.min(4, Math.max(1.2, 0.3 * box.short)), b.r === 'gable');
       const tile = color.setHex(HIP_ROOFS[(seed >>> 8) % HIP_ROOFS.length]);
       push(hip, roof, tile);
@@ -315,7 +359,6 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
       // rumah Jawa: a second, lower skirt roof (emper) wraps the teras and carport of wider 1-storey houses
       const emper = b.h <= FLOOR && box.short >= 7;
       if (emper) push(hip, hipRoof(box, top - 1.0, 0.6, false, EMPER), tile);
-      const front = frontSide(box, roadEscape);
       if (front) { // pagar on the kerb (sunk SINK into the slope), cement halaman behind it, teras pillars under the emper
         push(flat, fence(front, ground.y(front.fx, front.fz) - SINK), color.setHex(FENCE));
         push(yards, yard(front, (x, z) => ground.y(x, z)), color.setHex(PAVING));
@@ -324,7 +367,6 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     } else {
       push(flat, flatCap(b.p, top), color.setHex(FLAT_ROOFS[(seed >>> 8) % FLAT_ROOFS.length]));
       if (b.r === 'dome') {
-        const box = orientedBox(b.p);
         push(flat, dome(box.cx, box.cz, top, Math.min(7, Math.sqrt(a) / 3)), color.setHex(DOME));
         if (a >= 250) { // minaret at one corner of the oriented box, pulled 2 m inside
           const L = box.long / 2 - 2;

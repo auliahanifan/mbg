@@ -37,7 +37,7 @@ data.buildings = clearRoads(data); // footprints off the asphalt, before anythin
 const ground = makeGround(dem);
 const probe = corridorEscape(data);
 const roadEscape = (x: number, z: number) => probe(x, z, -5); // road within 5 m of the probe → pagar in front of the house
-ctx.scene.add(buildGround(ground, data.areas ?? []), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
+ctx.scene.add(buildGround(ground, data.areas ?? [], data.buildings), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
 const signals = buildSignals(city);
 const occupancy = rasterize(data.buildings, data.trees ?? []);
 ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
@@ -57,7 +57,7 @@ const spawn = pointOnEdge(city, spawnEdge.edge, spawnEdge.t);
 const at = new URLSearchParams(location.search).get('at')?.split(',').map(Number); // ?at=x,z[,heading]: start anywhere (dev)
 const resetCar = (): CarState => (at ? { x: at[0], z: at[1], heading: at[2] ?? 0, speed: 0 } : { x: spawn.x, z: spawn.z, heading: spawn.heading, speed: 0 });
 let car = resetCar();
-const traffic = spawnTraffic(city, 30, Math.random, car);
+const traffic = spawnTraffic(city, 70, Math.random, car);
 const trafficView = createTrafficRenderer(ctx.scene, traffic, ground);
 const kerbBlocked = (x: number, z: number) => probe(x, z, 0.7) !== null; // a kerb sits 0.6 m inside its own corridor; deeper means another carriageway
 const people = spawnPeople(city, 80, Math.random, car, kerbBlocked);
