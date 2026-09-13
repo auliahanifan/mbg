@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { CENTER, project, bbox, widthOf, area, orientedBox, classify, propagateNames, buildCityData, areaKind, lineKind, pointInRing, scatter, clearRoads, type OsmElement } from './osm';
+import purwokerto from '../../public/purwokerto.json';
+import { CENTER, project, bbox, widthOf, area, orientedBox, classify, propagateNames, buildCityData, areaKind, lineKind, pointInRing, scatter, clearRoads, corridorEscape, type CityData, type OsmElement } from './osm';
 
 describe('project', () => {
   it('maps the centre to the origin, north to -z, east to +x', () => {
@@ -201,7 +202,7 @@ describe('clearRoads', () => {
 
   it('pushes a footprint overlapping the road back past the kerb', () => {
     const [b] = clearRoads(data(STRAIGHT, [[0, 2], [10, 2], [10, 12], [0, 12]]));
-    expect(b.p).toEqual([[0, 3.9], [10, 3.9], [10, 12], [0, 12]]); // front wall out past the 3.8 m corridor, nothing sideways
+    expect(b.p).toEqual([[0, 4.5], [10, 4.5], [10, 12], [0, 12]]); // front wall out past the 4.4 m corridor (asphalt + sidewalk), nothing sideways
   });
 
   it('leaves a footprint clear of the road untouched', () => {
@@ -214,10 +215,25 @@ describe('clearRoads', () => {
     expect(clearance(p, BENT)).toBeLessThan(3);
     const [b] = clearRoads(data(BENT, p));
     expect(b.p.length).toBeGreaterThan(4); // the dipping wall got subdivided
-    expect(clearance(b.p, BENT)).toBeGreaterThan(3); // and now clears the asphalt
+    expect(clearance(b.p, BENT)).toBeGreaterThan(4.2); // and now clears the asphalt and the sidewalk
   });
 
   it('drops a footprint the road runs straight through', () => {
     expect(clearRoads(data(STRAIGHT, [[0, -20], [6, -20], [6, 20], [0, 20]]))).toEqual([]);
+  });
+
+  it('leaves no wall of the real Purwokerto data on any road or sidewalk', () => {
+    const real = purwokerto as unknown as CityData;
+    const probe = corridorEscape(real);
+    let bad = 0;
+    for (const b of clearRoads(real)) {
+      for (let i = 0; i < b.p.length; i++) {
+        const [ax, az] = b.p[i];
+        const [bx, bz] = b.p[(i + 1) % b.p.length];
+        const n = Math.ceil(Math.hypot(bx - ax, bz - az) * 4);
+        for (let k = 0; k <= n; k++) if (probe(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n, 0.3)) { bad++; break; } // clearWall's 0.2 m plus the sagitta between its 0.5 m samples: every wall stays > 1.1 m off the asphalt
+      }
+    }
+    expect(bad).toBe(0);
   });
 });

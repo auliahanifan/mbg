@@ -64,7 +64,7 @@ function placeCar(city: City, c: TrafficCar) {
 }
 
 /** Random edge whose midpoint is minR..maxR from `near`; if none exists, the edge whose midpoint is closest to that ring. */
-function pickEdge(city: City, rng: () => number, near: { x: number; z: number }, minR: number, maxR: number): number {
+export function pickEdge(city: City, rng: () => number, near: { x: number; z: number }, minR: number, maxR: number): number {
   const candidates: number[] = [];
   let best = 0;
   let bestScore = Infinity;
@@ -101,18 +101,17 @@ export function spawnTraffic(city: City, count: number, rng: () => number, near:
 }
 
 /**
- * Knocks a vehicle out of traffic: `dv` m/s along (nx,nz), plus lift and spin scaled by how light
- * it is. A BeAT cartwheels off the road, a Canter just gets shoved and slews round.
+ * A body knocked flying: `dv` m/s along (nx,nz), plus lift and spin scaled by how light it is (`mass` kg).
+ * A BeAT or a pedestrian cartwheels off the road, a Canter just gets shoved and slews round.
  */
-export function launch(c: TrafficCar, nx: number, nz: number, dv: number): void {
-  if (c.crash) return; // already flying; don't re-launch it every frame while we overlap
+export function makeCrash(heading: number, speed: number, mass: number, nx: number, nz: number, dv: number): Crash {
   dv = Math.min(dv, CRASH_MAX_DV);
-  const airborne = Math.min(1, AIRBORNE_MASS / vehicleMass(c.model));
+  const airborne = Math.min(1, AIRBORNE_MASS / mass);
   // how square the hit is on its flank: a T-bone spins and rolls it, a rear-end just shunts it
-  const side = nx * Math.cos(c.heading) - nz * Math.sin(c.heading);
-  c.crash = {
-    vx: nx * dv + Math.sin(c.heading) * c.speed,
-    vz: nz * dv + Math.cos(c.heading) * c.speed, // it keeps the speed it was already carrying
+  const side = nx * Math.cos(heading) - nz * Math.sin(heading);
+  return {
+    vx: nx * dv + Math.sin(heading) * speed,
+    vz: nz * dv + Math.cos(heading) * speed, // it keeps the speed it was already carrying
     vy: Math.min(dv * 0.35 * airborne, CRASH_MAX_LIFT),
     y: 0,
     spin: clampAbs(dv * side * 0.9 * airborne, CRASH_MAX_SPIN),
@@ -120,11 +119,17 @@ export function launch(c: TrafficCar, nx: number, nz: number, dv: number): void 
     rollRate: clampAbs(dv * side * 0.5 * airborne, CRASH_MAX_SPIN),
     rest: 0,
   };
+}
+
+/** Knocks a vehicle out of traffic. */
+export function launch(c: TrafficCar, nx: number, nz: number, dv: number): void {
+  if (c.crash) return; // already flying; don't re-launch it every frame while we overlap
+  c.crash = makeCrash(c.heading, c.speed, vehicleMass(c.model), nx, nz, dv);
   c.speed = 0;
 }
 
 /** One ballistic step for a wreck. Returns true once it has settled and should be recycled. */
-function stepCrash(c: TrafficCar, dt: number): boolean {
+export function stepCrash(c: { x: number; z: number; heading: number; crash?: Crash | null }, dt: number): boolean {
   const k = c.crash!;
   k.vy -= CRASH_G * dt;
   k.y += k.vy * dt;

@@ -293,8 +293,8 @@ export function buildCityData(elements: OsmElement[]): CityData {
   return { nodes, ways, buildings, pois, areas, lines, trees };
 }
 
-const ROAD_MARGIN = 0.8; // clearance beyond the asphalt edge; covers the 0.6 m roof overhang
-const CELL = 10; // grid cell; must exceed the widest corridor half-width (12/2 + margin) for the one-cell lookup below
+const ROAD_MARGIN = 1.4; // clearance beyond the asphalt edge: the 1.2 m sidewalk plus a kerb; the 0.6 m eaves may still overhang the sidewalk
+const CELL = 10; // grid cell; must exceed the widest corridor half-width (12/2 + margin = 7.4) for the one-cell lookup below
 
 /** Displacement that pushes a point out of every road corridor it is deeper than `tol` inside, or null if it is clear. A negative `tol` widens the corridor (proximity test). */
 export function corridorEscape(data: CityData) {
@@ -356,7 +356,7 @@ export function clearRoads(data: CityData): CityData['buildings'] {
     return [x, z];
   };
   const clearWall = (a: [number, number], b: [number, number]) => {
-    const steps = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1])); // ~1 m samples
+    const steps = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2); // ~0.5 m samples
     for (let i = 0; i <= steps; i++) if (escape(a[0] + ((b[0] - a[0]) * i) / steps, a[1] + ((b[1] - a[1]) * i) / steps, 0.2)) return false;
     return true;
   };
