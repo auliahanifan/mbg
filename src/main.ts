@@ -5,6 +5,7 @@ import { buildPoles, buildRoads, buildStalls } from './render/roads';
 import { buildBuildings } from './render/buildings';
 import { buildLandmarks } from './render/landmarks';
 import { buildSigns } from './render/signs';
+import { buildParkedBikes } from './render/parked';
 import { buildTerrain, buildGround } from './render/terrain';
 import { makeGround, grade, GRAVITY, type Dem } from './world/terrain';
 import { loadCity, nearestEdge, pointOnEdge } from './world/city';
@@ -40,6 +41,7 @@ ctx.scene.add(buildGround(ground, data.areas ?? []), buildTerrain(data, ground),
 const signals = buildSignals(city);
 const occupancy = rasterize(data.buildings, [...(data.trees ?? []), ...signals.approaches.map((a): [number, number] => [a.x, a.z])]); // signal poles are solid too
 ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
+ctx.scene.add(buildParkedBikes(city, ground, (x, z) => probe(x, z, 0.6) !== null || boxesAround(occupancy, x, z, 0.3).length > 4, (x, z) => boxesAround(occupancy, x, z, 2.5).length > 4)); // on the sidewalk, in front of a building
 const player = await createPlayerCar(ctx.scene);
 const chase = createChaseCamera(ctx, ground);
 

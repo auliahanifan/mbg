@@ -86,7 +86,7 @@ export function pickVehicle(rng: () => number): string {
 }
 
 // Indonesian colour mix: white dominates, then silver/grey/black, a little red and blue.
-const BODY = ['#eceef0', '#eceef0', '#eceef0', '#e6e8e9', '#b9bec4', '#b9bec4', '#8d9297', '#5b6065', '#2b2e31', '#1a1b1d', '#9c2b24', '#26406e', '#3f5c4a', '#c2ae92'];
+export const BODY = ['#eceef0', '#eceef0', '#eceef0', '#e6e8e9', '#b9bec4', '#b9bec4', '#8d9297', '#5b6065', '#2b2e31', '#1a1b1d', '#9c2b24', '#26406e', '#3f5c4a', '#c2ae92'];
 const CLOTH = ['#c8382f', '#25507f', '#2f2f33', '#d8d9db', '#3f7a4d', '#e0a02a'];
 const HELMET = ['#1a1b1d', '#d8d9db', '#c8382f', '#25507f', '#e0a02a'];
 
@@ -206,10 +206,10 @@ function buildCar(s: CarSpec, rng: () => number): THREE.Group {
   return group;
 }
 
-function buildBike(s: BikeSpec, rng: () => number): THREE.Group {
+function buildBike(s: BikeSpec, rng: () => number, parked = false): THREE.Group {
   const group = new THREE.Group();
   const f = s.wb / 2;
-  const colour = pick(BODY, rng);
+  const colour = parked ? '#ffffff' : pick(BODY, rng); // parked bikes are instanced and take their colour per instance
   const paint: THREE.BufferGeometry[] = [];
   const matte: THREE.BufferGeometry[] = [];
   const glass: THREE.BufferGeometry[] = [];
@@ -225,13 +225,14 @@ function buildBike(s: BikeSpec, rng: () => number): THREE.Group {
   glass.push(box(0.2, 0.14, 0.1, 0, 0.88, f - 0.2));                                    // headlight
   tail.push(box(0.14, 0.1, 0.07, 0, 0.8, -0.62));
 
-  // rider: leaning torso, helmet, legs on the board, arms to the bar
-  const shirt = pick(CLOTH, rng);
-  matte.push(tinted(box(0.36, 0.56, 0.26, 0, 1.12, -0.14).rotateX(-0.12), shirt));
-  matte.push(tinted(new THREE.SphereGeometry(0.13, 10, 8).translate(0, 1.52, -0.06), pick(HELMET, rng)));
-  for (const side of [1, -1]) {
-    matte.push(tinted(box(0.14, 0.14, 0.5, side * 0.12, 0.55, 0.1), '#33373b'));        // legs
-    matte.push(tinted(box(0.09, 0.09, 0.5, side * 0.19, 1.06, 0.16).rotateX(0.35), shirt)); // arms
+  if (!parked) { // rider: leaning torso, helmet, legs on the board, arms to the bar
+    const shirt = pick(CLOTH, rng);
+    matte.push(tinted(box(0.36, 0.56, 0.26, 0, 1.12, -0.14).rotateX(-0.12), shirt));
+    matte.push(tinted(new THREE.SphereGeometry(0.13, 10, 8).translate(0, 1.52, -0.06), pick(HELMET, rng)));
+    for (const side of [1, -1]) {
+      matte.push(tinted(box(0.14, 0.14, 0.5, side * 0.12, 0.55, 0.1), '#33373b'));        // legs
+      matte.push(tinted(box(0.09, 0.09, 0.5, side * 0.19, 1.06, 0.16).rotateX(0.35), shirt)); // arms
+    }
   }
 
   assemble(group, [[paint, PAINT], [matte, MATTE], [glass, GLASS], [tail, TAIL]]);
@@ -239,8 +240,8 @@ function buildBike(s: BikeSpec, rng: () => number): THREE.Group {
   return group;
 }
 
-/** A fresh vehicle mesh; forward is +z, origin on the road surface. */
-export function buildVehicle(name: string, rng: () => number = Math.random): THREE.Group {
+/** A fresh vehicle mesh; forward is +z, origin on the road surface. `parked` (bikes): no rider, white paint for per-instance colour. */
+export function buildVehicle(name: string, rng: () => number = Math.random, parked = false): THREE.Group {
   const s = vehicleSpec(name);
-  return 'bike' in s ? buildBike(s, rng) : buildCar(s, rng);
+  return 'bike' in s ? buildBike(s, rng, parked) : buildCar(s, rng);
 }
