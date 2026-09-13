@@ -53,14 +53,15 @@ describe('classify', () => {
   it('explicit levels/height win', () => {
     expect(classify({ building: 'yes', 'building:levels': '4' }, BIG)).toEqual({ h: 12.8 });
     expect(classify({ building: 'yes', height: '15' }, BIG)).toEqual({ h: 15 });
-    expect(classify({ building: 'yes', 'building:levels': '2' }, SQ)).toEqual({ h: 6.4, r: 'hip' }); // a 2-storey house keeps its roof
+    expect(classify({ building: 'yes', 'building:levels': '2' }, SQ).h).toBe(6.4); // a 2-storey house keeps its roof
+    expect(['hip', 'gable']).toContain(classify({ building: 'yes', 'building:levels': '2' }, SQ).r);
   });
   it('small plain footprints are 1-2 storey hip-roofed houses', () => {
     const c = classify({ building: 'yes' }, SQ);
     expect([3.2, 6.4]).toContain(c.h);
-    expect(c.r).toBe('hip');
+    expect(['hip', 'gable']).toContain(c.r);
     expect(classify({ building: 'yes' }, HOUSE_BIG).r).toBeUndefined(); // 400 m² plain box: not a house
-    expect(classify({ building: 'house' }, HOUSE_BIG).r).toBe('hip'); // explicit house tag ignores the area cap
+    expect(['hip', 'gable']).toContain(classify({ building: 'house' }, HOUSE_BIG).r); // explicit house tag ignores the area cap
     expect(classify({ building: 'yes' }, SQ)).toEqual(c); // deterministic
   });
   it('L-shapes and big plain boxes get flat roofs', () => {
@@ -69,17 +70,25 @@ describe('classify', () => {
     expect([3.2, 6.4]).toContain(big.h);
     expect(big.r).toBeUndefined();
   });
-  it('shops are 2-3 storey ruko, hotels 6-9, mosques domed', () => {
+  it('shops are 2-3 storey ruko, hotels 4-6, mosques domed', () => {
     const ruko = classify({ building: 'yes', shop: 'bakery' }, SQ);
     expect([6.4, 9.6]).toContain(ruko.h);
     expect(ruko.r).toBeUndefined();
     const hotel = classify({ building: 'yes', tourism: 'hotel' }, BIG);
-    expect(hotel.h).toBeGreaterThanOrEqual(19.2);
-    expect(hotel.h).toBeLessThanOrEqual(28.8);
+    expect(hotel.h).toBeGreaterThanOrEqual(12.8);
+    expect(hotel.h).toBeLessThanOrEqual(19.2);
     expect(classify({ building: 'mosque' }, SQ)).toEqual({ h: 4.8, r: 'dome' });
     expect(classify({ building: 'yes', amenity: 'place_of_worship' }, SQ).r).toBe('dome');
     expect(classify({ building: 'yes', amenity: 'place_of_worship', religion: 'christian' }, SQ).r).toBeUndefined();
     expect(classify({ building: 'yes', name: 'Mushola Darul Hikmah' }, SQ).r).toBe('dome');
+  });
+});
+
+describe('classify known landmarks', () => {
+  it('Rita Supermall is a 5-storey mall with a 17-storey tower, the station a hip-roofed hall', () => {
+    expect(classify({ building: 'yes', name: 'Rita Supermall' }, BIG)).toEqual({ h: 16, t: 54.4 });
+    expect(classify({ building: 'yes', name: 'Stasiun Purwokerto' }, BIG)).toEqual({ h: 6.4, r: 'hip' });
+    expect(classify({ building: 'yes', 'building:levels': '12', name: 'Aston Imperium Hotel Purwokerto', tourism: 'hotel' }, BIG)).toEqual({ h: 38.4 });
   });
 });
 

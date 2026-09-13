@@ -23,13 +23,13 @@ export const bbox = () => ({
 });
 
 export interface CityPoi { id: string; name: string; kind: 'kitchen' | 'school' | 'landmark'; x: number; z: number }
-export type Roof = 'hip' | 'dome';
+export type Roof = 'hip' | 'gable' | 'dome';
 export type AreaKind = 'grass' | 'wood' | 'farm' | 'water' | 'sand' | 'paved';
 export type LineKind = 'rail' | 'river' | 'stream';
 export interface CityData {
   nodes: [number, number][];
   ways: { n: number[]; w: number; name?: string }[];
-  buildings: { p: [number, number][]; h: number; r?: Roof; name?: string }[];
+  buildings: { p: [number, number][]; h: number; r?: Roof; t?: number; name?: string }[]; // t: tower rising above the roof (podium + tower blocks)
   pois: CityPoi[];
   areas?: { p: [number, number][]; k: AreaKind }[]; // closed landuse / water rings
   lines?: { p: [number, number][]; k: LineKind }[]; // rail and waterways
@@ -111,12 +111,28 @@ const isMosque = (t: Record<string, string>) =>
   t.building === 'mosque' || t.religion === 'muslim' || (t.amenity === 'place_of_worship' && !t.religion) || /masjid|musholl?a/i.test(t.name ?? '');
 
 /**
- * Height + roof kind from tags and footprint. Explicit height/levels win. Otherwise Purwokerto defaults:
- * small plain footprints are 1–2 storey hip-roofed houses, tagged shops/offices 2–3 storey flat ruko,
- * hotels 6–9, mall/hospital 3–4, civic 1–2, mosques 4.8 m with a dome.
+ * Real Purwokerto landmarks OSM leaves untagged: floors (and a tower for podium + tower blocks) by name.
+ * Rita Supermall = 5-storey mall under the 22-storey Swiss-Belhotel tower; Stasiun Purwokerto is the 1916 colonial hall under one big genteng roof.
  */
-export function classify(tags: Record<string, string>, ring: [number, number][]): { h: number; r?: Roof } {
+const KNOWN: [RegExp, { floors: number; r?: Roof; t?: number }][] = [
+  [/^rita supermall/i, { floors: 5, t: 17 * FLOOR }],
+  [/^dominic hotel/i, { floors: 8 }],
+  [/^moro purwokerto/i, { floors: 4 }],
+  [/^stasiun purwokerto$/i, { floors: 2, r: 'hip' }],
+  [/^kantor bupati banyumas/i, { floors: 3, r: 'hip' }],
+  [/baitussalam/i, { floors: 3, r: 'dome' }],
+  [/^museum bank rakyat/i, { floors: 2, r: 'hip' }],
+];
+
+/**
+ * Height + roof kind from tags and footprint. Named landmarks (KNOWN) and explicit height/levels win. Otherwise Purwokerto defaults:
+ * small plain footprints are 1–2 storey houses under a genteng limasan (hip) or pelana (gable) roof, tagged shops/offices 2–3 storey flat ruko,
+ * hotels 4–6, mall/hospital 3–4, civic 1–2, mosques 4.8 m with a dome.
+ */
+export function classify(tags: Record<string, string>, ring: [number, number][]): { h: number; r?: Roof; t?: number } {
   const rnd = hash(ring[0][0], ring[0][1]) % 100;
+  const known = KNOWN.find(([re]) => re.test(tags.name ?? ''))?.[1];
+  if (known) return { h: round1(known.floors * FLOOR), ...(known.r && { r: known.r }), ...(known.t && { t: round1(known.t) }) };
   const levels = parseInt(tags['building:levels'] ?? '', 10);
   const height = parseFloat(tags.height ?? '');
   const explicit = height > 0 ? height : levels > 0 ? levels * FLOOR : 0;
@@ -127,11 +143,11 @@ export function classify(tags: Record<string, string>, ring: [number, number][])
   if (HOUSE.has(b) && !tagged && (b !== 'yes' || a <= 300)) {
     const h = round1(explicit || FLOOR * (rnd < 78 ? 1 : 2));
     const box = orientedBox(ring);
-    const hip = ring.length <= 8 && box.short <= 18 && a >= 0.7 * box.long * box.short;
-    return hip ? { h, r: 'hip' } : { h };
+    const pitched = ring.length <= 8 && box.short <= 18 && a >= 0.7 * box.long * box.short;
+    return pitched ? { h, r: rnd % 5 < 2 ? 'gable' : 'hip' } : { h };
   }
   let floors: number;
-  if (tags.tourism === 'hotel') floors = 6 + (rnd % 4);
+  if (tags.tourism === 'hotel') floors = 4 + (rnd % 3);
   else if (tags.shop === 'mall' || b === 'hospital' || tags.amenity === 'hospital') floors = 3 + (rnd % 2);
   else if (CIVIC.test(b) || /school|kindergarten|college|university/.test(tags.amenity ?? '')) floors = 1 + (rnd % 2);
   else if (tagged || RUKO.has(b)) floors = 2 + (rnd % 2);
@@ -280,8 +296,8 @@ export function buildCityData(elements: OsmElement[]): CityData {
 const ROAD_MARGIN = 0.8; // clearance beyond the asphalt edge; covers the 0.6 m roof overhang
 const CELL = 10; // grid cell; must exceed the widest corridor half-width (12/2 + margin) for the one-cell lookup below
 
-/** Displacement that pushes a point out of every road corridor it is deeper than `tol` inside, or null if it is clear. */
-function corridorEscape(data: CityData) {
+/** Displacement that pushes a point out of every road corridor it is deeper than `tol` inside, or null if it is clear. A negative `tol` widens the corridor (proximity test). */
+export function corridorEscape(data: CityData) {
   const segs: [number, number, number, number, number][] = []; // ax, az, bx, bz, half width
   const grid = new Map<number, number[]>();
   const key = (i: number, j: number) => i * 8192 + j;

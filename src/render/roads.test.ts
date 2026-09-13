@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ribbon, disc, dashes } from './roads';
+import { ribbon, disc, dashes, polePoints } from './roads';
 
 const xz = (p: number[]) => Array.from({ length: p.length / 3 }, (_, i) => [p[i * 3], p[i * 3 + 2]]);
 
@@ -43,5 +43,14 @@ describe('dashes', () => {
     const d = dashes([[0, 0], [10, 0], [10, 40]], 0, 0);
     expect(d.length).toBeGreaterThanOrEqual(6);
     expect(d.some((g) => g.positions[2] > 10)).toBe(true); // some dash lies on the vertical segment (z > 10)
+  });
+});
+
+describe('polePoints', () => {
+  it('spaces poles 35 m apart on the left kerb', () => {
+    const p = polePoints([[0, 0], [100, 0]], 3);
+    expect(p).toHaveLength(3); // at 17.5, 52.5, 87.5
+    expect(p[0][0]).toBeCloseTo(17.5);
+    expect(p[0][1]).toBeCloseTo(4); // left of an eastbound road (+z)
   });
 });

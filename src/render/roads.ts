@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { City } from '../world/city';
 import { densify, FLAT, type Ground } from '../world/terrain';
 
@@ -6,6 +7,10 @@ const SIDEWALK_EXTRA = 2.4;
 const DASH = 3;
 const MARK_W = 0.15;
 const Y = { sidewalk: 0.03, asphalt: 0.06, marking: 0.09 };
+const POLE_EVERY = 35; // tiang listrik spacing along the left kerb
+const POLE_H = 9;
+const STALL_EVERY = 90; // tenda PKL spacing along main-road kerbs
+const TARPS = [0x2f6fb0, 0xe8862a, 0x3f8f5a, 0xd9a52a, 0xc94a3c]; // terpal biru, oranye, hijau, kuning, merah
 
 export type Geo = { positions: number[]; indices: number[] };
 /** Constant height, or a height per (x, z) so the strip follows the ground. */
@@ -132,6 +137,112 @@ export function buildRoads(city: City, ground: Ground = FLAT): THREE.Group {
     group.add(m);
   }
   return group;
+}
+
+/** Points every `every` m along the left kerb of a polyline, `kerb` m past the asphalt. Poles: 1 m out every POLE_EVERY. */
+export function polePoints(pts: [number, number][], halfWidth: number, every = POLE_EVERY, kerb = 1.0): [number, number][] {
+  const out: [number, number][] = [];
+  let next = every / 2;
+  let start = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [ax, az] = pts[i];
+    const [bx, bz] = pts[i + 1];
+    const len = Math.hypot(bx - ax, bz - az);
+    if (len < 1e-3) continue;
+    const nx = -(bz - az) / len;
+    const nz = (bx - ax) / len;
+    while (next <= start + len) {
+      const t = (next - start) / len;
+      out.push([ax + (bx - ax) * t + nx * (halfWidth + kerb), az + (bz - az) * t + nz * (halfWidth + kerb)]);
+      next += every;
+    }
+    start += len;
+  }
+  return out;
+}
+
+/**
+ * Concrete power poles along every road ≥ 6 m wide, strung with three sagging cables per span. `onRoad` drops poles
+ * that land on another carriageway (dual carriageways, junctions); a dropped pole also breaks the cable run.
+ */
+export function buildPoles(city: City, ground: Ground = FLAT, onRoad: (x: number, z: number) => boolean = () => false): THREE.Group {
+  const { nodes, ways } = city.data;
+  const runs: [number, number][][] = [];
+  for (const way of ways) {
+    if (way.w < 6) continue;
+    let run: [number, number][] = [];
+    for (const p of polePoints(way.n.map((i) => nodes[i]), way.w / 2)) {
+      if (onRoad(p[0], p[1])) { if (run.length) runs.push(run); run = []; } else run.push(p);
+    }
+    if (run.length) runs.push(run);
+  }
+  const poles = runs.flat();
+  const g = new THREE.Group();
+  if (!poles.length) return g;
+  const mesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.11, 0.16, POLE_H, 6).translate(0, POLE_H / 2, 0), new THREE.MeshStandardMaterial({ color: 0x9a9791, roughness: 1 }), poles.length);
+  const o = new THREE.Object3D();
+  poles.forEach(([x, z], i) => { o.position.set(x, ground.y(x, z), z); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix); });
+  mesh.castShadow = true;
+  const cable: number[] = [];
+  for (const run of runs) {
+    for (let i = 0; i + 1 < run.length; i++) {
+      const [ax, az] = run[i];
+      const [bx, bz] = run[i + 1];
+      const ay = ground.y(ax, az);
+      const by = ground.y(bx, bz);
+      for (const dy of [-0.4, -0.8, -1.2]) { // three wires below the pole top, each sagging 0.5 m mid-span
+        const top = POLE_H + dy;
+        const mx = (ax + bx) / 2, mz = (az + bz) / 2, my = (ay + by) / 2 + top - 0.5;
+        cable.push(ax, ay + top, az, mx, my, mz, mx, my, mz, bx, by + top, bz);
+      }
+    }
+  }
+  const lines = new THREE.BufferGeometry();
+  lines.setAttribute('position', new THREE.Float32BufferAttribute(cable, 3));
+  g.add(mesh, new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x1a1a1a })));
+  return g;
+}
+
+/**
+ * Tenda PKL on the kerb of every road ≥ 8 m: a gerobak under a tarpaulin on four poles, every STALL_EVERY m, facing the
+ * road. `blocked` skips spots on another carriageway or inside a building.
+ */
+export function buildStalls(city: City, ground: Ground = FLAT, blocked: (x: number, z: number) => boolean = () => false): THREE.Group {
+  const { nodes, ways } = city.data;
+  const spots: [number, number, number][] = []; // x, z, heading of the kerb
+  for (const way of ways) {
+    if (way.w < 8) continue;
+    const pts = way.n.map((i) => nodes[i]);
+    for (const [x, z] of polePoints(pts, way.w / 2, STALL_EVERY, 1.4)) {
+      if (blocked(x, z)) continue;
+      let best = 0, bd = Infinity; // heading of the nearest segment, so the stall's long side runs along the kerb
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const mx = (pts[i][0] + pts[i + 1][0]) / 2, mz = (pts[i][1] + pts[i + 1][1]) / 2;
+        const d = Math.hypot(mx - x, mz - z);
+        if (d < bd) { bd = d; best = Math.atan2(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); }
+      }
+      spots.push([x, z, best]);
+    }
+  }
+  const g = new THREE.Group();
+  if (!spots.length) return g;
+  const cart = new THREE.BoxGeometry(1.8, 1.0, 0.9).translate(0, 1.0, 0); // gerobak on its wheels, 0.5–1.5 m
+  const tarp = mergeGeometries([
+    new THREE.BoxGeometry(2.8, 0.06, 2.4).translate(0, 2.3, 0),
+    ...[[-1.3, -1.1], [1.3, -1.1], [-1.3, 1.1], [1.3, 1.1]].map(([x, z]) => new THREE.BoxGeometry(0.06, 2.3, 0.06).translate(x, 1.15, z)),
+  ]);
+  const carts = new THREE.InstancedMesh(cart, new THREE.MeshStandardMaterial({ color: 0x8a6a48, roughness: 0.9 }), spots.length);
+  const tarps = new THREE.InstancedMesh(tarp, new THREE.MeshStandardMaterial({ roughness: 0.8 }), spots.length);
+  const o = new THREE.Object3D();
+  const c = new THREE.Color();
+  spots.forEach(([x, z, heading], i) => {
+    o.position.set(x, ground.y(x, z), z); o.rotation.set(0, heading, 0); o.updateMatrix();
+    carts.setMatrixAt(i, o.matrix); tarps.setMatrixAt(i, o.matrix);
+    tarps.setColorAt(i, c.setHex(TARPS[i % TARPS.length]));
+  });
+  carts.castShadow = tarps.castShadow = true;
+  g.add(carts, tarps);
+  return g;
 }
 
 /** Planar world-space UVs (1 repeat per `metres`) so a tiling texture reads the same on every ribbon. */

@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { createScene, START_HOUR } from './render/scene';
 import { createPost } from './render/post';
-import { buildRoads } from './render/roads';
+import { buildPoles, buildRoads, buildStalls } from './render/roads';
 import { buildBuildings } from './render/buildings';
 import { buildLandmarks } from './render/landmarks';
 import { buildTerrain, buildGround } from './render/terrain';
 import { makeGround, grade, GRAVITY, type Dem } from './world/terrain';
 import { loadCity, nearestEdge, pointOnEdge } from './world/city';
-import { clearRoads, project, SPAWN, type CityData } from './world/osm';
+import { clearRoads, corridorEscape, project, SPAWN, type CityData } from './world/osm';
 import { routeLength } from './world/routing';
 import { rasterize, boxesAround } from './vehicle/occupancy';
 import { stepCar, type CarState } from './vehicle/carPhysics';
@@ -29,8 +29,11 @@ const [data, dem]: [CityData, Dem] = await Promise.all([fetch('/purwokerto.json'
 const city = loadCity(data);
 data.buildings = clearRoads(data); // footprints off the asphalt, before anything renders or collides with them
 const ground = makeGround(dem);
-ctx.scene.add(buildGround(ground, data.areas ?? []), buildTerrain(data, ground), buildRoads(city, ground), buildBuildings(data.buildings, ground), buildLandmarks(data.pois, ground));
+const probe = corridorEscape(data);
+const roadEscape = (x: number, z: number) => probe(x, z, -5); // road within 5 m of the probe → pagar in front of the house
+ctx.scene.add(buildGround(ground, data.areas ?? []), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildBuildings(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
 const occupancy = rasterize(data.buildings, data.trees);
+ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
 const player = await createPlayerCar(ctx.scene);
 const chase = createChaseCamera(ctx, ground);
 

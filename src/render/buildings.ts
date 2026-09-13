@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { area, hash, orientedBox, type CityData, type OrientedBox } from '../world/osm';
 import { FLAT, type Ground } from '../world/terrain';
 
-const WALLS = [0xe6e0d4, 0xd9d0bf, 0xece7dc, 0xcdd4d8, 0xe4d7bd, 0xd6dccf, 0xc9bfb3, 0xb9c4b0, 0xd8c9b8];
-const HIP_ROOFS = [0xa9513a, 0xb4623f, 0x93493a, 0xc26d4a, 0xa9513a, 0x72757c, 0x4d4b49]; // mostly genteng, some zinc / asbes
+const WALLS = [0xf4f0e8, 0xece6da, 0xf0ebe0, 0xdfe8dc, 0xdde6ec, 0xf3e4d0, 0xf2eac6, 0xd6cec4, 0xe2d6c8, 0xeed8c6, 0xe2e8d6]; // cat tembok Purwokerto: putih, krem, mint, biru muda, peach, kuning muda
+const FENCE = 0xbfb9ae; // pagar tembok plester
+const PAVING = 0xa6a29a; // halaman semen / paving block
+const HIP_ROOFS = [0xb8553a, 0xc4643f, 0x9e4a36, 0xcf7048, 0xb8553a, 0x3d3532, 0x6f7378, 0x4d6f86]; // genteng tanah liat, genteng glazur hitam, seng, galvalum biru
 const FLAT_ROOFS = [0x9d9c98, 0x8f918f, 0xa8a49d];
 const DOME = 0x3a9a68;
 const MINARET = 0xf2eee4;
@@ -11,6 +13,9 @@ const WINDOW_W = 3; // metres per facade texture repeat (one window)
 const FLOOR = 3.2; // metres per vertical repeat (one storey)
 const TILE = 1.6; // metres per roof-tile texture repeat (4 rows of genteng)
 const OVERHANG = 0.6;
+const EMPER = 2.2; // the lower skirt roof over the teras / carport on 1-storey houses
+const FENCE_H = 1.1 + 0.25; // 1.1 m above the kerb; the extra is buried (SINK)
+const GATE = 2.8;
 const SINK = 0.25; // walls start this far below the highest ground under the footprint's lowest corner
 
 export type Geo = { positions: number[]; indices: number[]; uvs?: number[] };
@@ -39,29 +44,117 @@ export function flatCap(ring: [number, number][], y: number): Geo {
   return { positions: ring.flatMap(([x, z]) => [x, y, z]), indices: tris.flat() };
 }
 
-/** Closed hip roof over the oriented box: eaves at y (OVERHANG past the walls), ridge along the long axis at y + rise. 8 flat-shaded triangles; planar tile UVs. */
-export function hipRoof(box: OrientedBox, y: number, rise: number): Geo {
+/**
+ * Closed hip (limasan) roof over the oriented box: eaves at y (OVERHANG past the walls), ridge along the long axis at y + rise. 8 flat-shaded triangles; planar tile UVs.
+ * `gable` (pelana) runs the ridge the full length; the two vertical end triangles are returned separately so they get wall colour.
+ */
+export function hipRoof(box: OrientedBox, y: number, rise: number, gable = false, overhang = OVERHANG): Geo & { ends?: Geo } {
   const { cx, cz, ux, uz } = box;
   const vx = -uz;
   const vz = ux;
-  const L = box.long / 2 + OVERHANG;
-  const S = box.short / 2 + OVERHANG;
+  const L = box.long / 2 + overhang;
+  const S = box.short / 2 + overhang;
   const at = (su: number, sv: number, yy: number) => [cx + ux * su + vx * sv, yy, cz + uz * su + vz * sv];
   const c = [at(-L, -S, y), at(L, -S, y), at(L, S, y), at(-L, S, y)];
-  const r = Math.max(0, L - S); // 45° hips → ridge inset by the half-width
+  const r = gable ? L : Math.max(0, L - S); // 45° hips → ridge inset by the half-width
   const r0 = at(-r, 0, y + rise);
   const r1 = at(r, 0, y + rise);
-  const faces = [[c[0], c[1], r1, r0], [c[2], c[3], r0, r1], [c[1], c[2], r1], [c[3], c[0], r0], [c[3], c[2], c[1], c[0]]];
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  for (const f of faces) {
-    const base = positions.length / 3;
-    for (const p of f) { positions.push(p[0], p[1], p[2]); uvs.push(p[0] / TILE, p[2] / TILE); }
-    indices.push(base, base + 1, base + 2);
-    if (f.length === 4) indices.push(base, base + 2, base + 3);
+  const ends = [[c[1], c[2], r1], [c[3], c[0], r0]];
+  const faces = [[c[0], c[1], r1, r0], [c[2], c[3], r0, r1], ...(gable ? [] : ends), [c[3], c[2], c[1], c[0]]];
+  const geo = (fs: number[][][]): Geo => {
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    for (const f of fs) {
+      const base = positions.length / 3;
+      for (const p of f) { positions.push(p[0], p[1], p[2]); uvs.push(p[0] / TILE, p[2] / TILE); }
+      indices.push(base, base + 1, base + 2);
+      if (f.length === 4) indices.push(base, base + 2, base + 3);
+    }
+    return { positions, uvs, indices };
+  };
+  return gable ? { ...geo(faces), ends: geo(ends) } : geo(faces);
+}
+
+/** Tower footprint over the podium: a rectangle at the oriented box's centre, capped so a wide mall grows a slender hotel block. */
+export function towerRing(box: OrientedBox, long = Math.min(45, box.long * 0.4), short = Math.min(28, box.short * 0.6)): [number, number][] {
+  const { cx, cz, ux, uz } = box;
+  const L = long / 2;
+  const S = short / 2;
+  return [[-L, -S], [L, -S], [L, S], [-L, S]].map(([u, v]) => [cx + ux * u - uz * v, cz + uz * u + ux * v]);
+}
+
+/** Axis-free box from a segment a→b, `thick` wide, y0..y0+h: two wall quads + a cap so it reads as a plastered pagar. */
+function slab(a: [number, number], b: [number, number], thick: number, y0: number, h: number): Geo {
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const nx = (-(b[1] - a[1]) / l) * thick / 2;
+  const nz = ((b[0] - a[0]) / l) * thick / 2;
+  const ring: [number, number][] = [[a[0] + nx, a[1] + nz], [b[0] + nx, b[1] + nz], [b[0] - nx, b[1] - nz], [a[0] - nx, a[1] - nz]];
+  const w = wallQuads(ring, h, y0);
+  const cap = flatCap(ring, y0 + h);
+  return { positions: [...w.positions, ...cap.positions], uvs: [...w.uvs!, 0, 0, 0, 0, 0, 0, 0, 0], indices: [...w.indices, ...cap.indices.map((i) => i + 16)] };
+}
+
+export type Front = { fx: number; fz: number; tx: number; tz: number; half: number; nx: number; nz: number; off: number };
+
+/**
+ * The road-facing side of a house: the oriented-box side whose outward probe (5 m past the wall) lands near a road
+ * corridor. `roadEscape` is corridorEscape's displacement for that probe (null = no road): its component along the
+ * outward normal is minus the corridor depth, so `off` (wall → kerb line) lands 0.5 m outside the corridor edge, never
+ * under 0.8 m. (fx, fz) is the kerb line's centre, (tx, tz) its direction, `half` its half-length. Null when no side faces a road.
+ */
+export function frontSide(box: OrientedBox, roadEscape: (x: number, z: number) => [number, number] | null): Front | null {
+  const { cx, cz, ux, uz } = box;
+  const vx = -uz;
+  const vz = ux;
+  const L = box.long / 2;
+  const S = box.short / 2;
+  // each side: outward normal (nx, nz), half-extent along the normal, and the tangent + half-length of the side
+  const sides: [number, number, number, number, number, number][] = [[vx, vz, S, ux, uz, L], [-vx, -vz, S, ux, uz, L], [ux, uz, L, vx, vz, S], [-ux, -uz, L, vx, vz, S]];
+  for (const [nx, nz, d, tx, tz, half] of sides) {
+    const esc = roadEscape(cx + nx * (d + 5), cz + nz * (d + 5));
+    if (!esc) continue;
+    const off = Math.max(0.8, 5 + esc[0] * nx + esc[1] * nz - 0.5);
+    return { fx: cx + nx * (d + off), fz: cz + nz * (d + off), tx, tz, half, nx, nz, off };
   }
-  return { positions, uvs, indices };
+  return null;
+}
+
+const concat = (parts: Geo[]): Geo => {
+  const out: Geo = { positions: [], uvs: [], indices: [] };
+  for (const g of parts) {
+    const base = out.positions.length / 3;
+    out.positions.push(...g.positions);
+    out.uvs!.push(...(g.uvs ?? new Array((g.positions.length / 3) * 2).fill(0)));
+    out.indices.push(...g.indices.map((i) => i + base));
+  }
+  return out;
+};
+
+/** Pagar along the kerb line of the front, split by a GATE gap in the middle. */
+export function fence(f: Front, y0: number): Geo {
+  const at = (t: number): [number, number] => [f.fx + f.tx * t, f.fz + f.tz * t];
+  const g = Math.min(GATE / 2, f.half * 0.4);
+  return concat([slab(at(-f.half), at(-g), 0.2, y0, FENCE_H), slab(at(g), at(f.half), 0.2, y0, FENCE_H)]);
+}
+
+/** Halaman: a cement slab from the front wall out to the pagar, each corner on the ground (+12 cm: clears the terrain crease inside a DEM cell) so it hugs a slope. */
+export function yard(f: Front, y: (x: number, z: number) => number): Geo {
+  const wall = (t: number): [number, number] => [f.fx + f.tx * t - f.nx * f.off, f.fz + f.tz * t - f.nz * f.off];
+  const kerb = (t: number): [number, number] => [f.fx + f.tx * t, f.fz + f.tz * t];
+  const ring = [wall(-f.half), wall(f.half), kerb(f.half), kerb(-f.half)];
+  return { positions: ring.flatMap(([x, z]) => [x, y(x, z) + 0.12, z]), indices: [0, 1, 2, 0, 2, 3] };
+}
+
+/** Teras: three 0.22 m square pillars 1.6 m in front of the wall, holding up the emper roof (y0 → yTop). */
+export function pillars(f: Front, y0: number, yTop: number): Geo {
+  const out: Geo[] = [];
+  for (const t of [-0.6, 0, 0.6].map((k) => k * f.half)) {
+    const cx = f.fx + f.tx * t - f.nx * (f.off - 1.6);
+    const cz = f.fz + f.tz * t - f.nz * (f.off - 1.6);
+    out.push(slab([cx - f.tx * 0.11, cz - f.tz * 0.11], [cx + f.tx * 0.11, cz + f.tz * 0.11], 0.22, y0, yTop - y0));
+  }
+  return concat(out);
 }
 
 function dome(cx: number, cz: number, y: number, r: number): Geo {
@@ -103,11 +196,19 @@ const grime = (g: CanvasRenderingContext2D) => {
 };
 /** Upper storeys: one window per 3 m (glass spans 1.0–2.5 m above the floor). */
 const upperTexture = () => canvas((g) => { window_(g, 40, 30, 48, 58); g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, 118, 128, 10); });
+/** Jendela rumah: white frame, pale glass, teralis (three vertical bars) — the Purwokerto house window. */
+const houseWindow = (g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+  g.fillStyle = '#f4f2ec'; g.fillRect(x, y, w, h); // frame
+  g.fillStyle = '#8fa4b4'; g.fillRect(x + 3, y + 3, w - 6, h - 6); // glass with a curtain behind it
+  g.fillStyle = '#2d2d2d'; for (let k = 1; k <= 3; k++) g.fillRect(x + (k * w) / 4 - 1, y + 3, 2, h - 6); // teralis
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x - 2, y - 3, w + 4, 3); // lintel shadow
+};
 /** House ground floor over 9 m: window, door, window; plinth band along the bottom. */
 const houseTexture = () => canvas((g) => {
-  window_(g, 8, 34, 28, 50);
-  window_(g, 92, 34, 28, 50);
+  houseWindow(g, 8, 36, 28, 46);
+  houseWindow(g, 92, 36, 28, 46);
   g.fillStyle = '#6b4a2e'; g.fillRect(52, 30, 24, 98); // wooden door to the ground
+  g.fillStyle = '#4e3520'; g.fillRect(63, 30, 2, 98); g.fillRect(52, 60, 24, 2); // door panels
   g.fillStyle = '#b8b0a4'; g.fillRect(0, 116, 128, 12); // plinth
   grime(g);
 });
@@ -123,7 +224,7 @@ const rukoTexture = () => canvas((g) => {
 const tileTexture = () => canvas((g) => {
   for (let row = 0; row < 4; row++) {
     const y = row * 32;
-    g.fillStyle = '#e8e0d8'; g.fillRect(0, y, 128, 32);
+    g.fillStyle = '#f3ebe3'; g.fillRect(0, y, 128, 32);
     for (let k = 0; k < 24; k++) { g.fillStyle = `rgba(60,50,40,${0.05 + ((k * 7 + row) % 5) / 40})`; g.fillRect((k * 53 + row * 17) % 128, y + ((k * 11) % 24), 6, 5); } // moss / weathering
     g.fillStyle = '#9c9088'; g.fillRect(0, y + 26, 128, 6); // shadow under the tile lip
     g.fillStyle = '#cfc6bd';
@@ -158,12 +259,13 @@ function toGeometry(b: Batch): THREE.BufferGeometry {
  * Five merged meshes: house / ruko ground floors, upper storeys (all textured, vertex-tinted), tiled hip roofs,
  * and plain flat roofs + domes + minarets. Buildings sit SINK below the lowest ground corner so slopes never show a gap.
  */
-export function buildBuildings(buildings: CityData['buildings'], ground: Ground = FLAT): THREE.Group {
+export function buildBuildings(buildings: CityData['buildings'], ground: Ground = FLAT, roadEscape: (x: number, z: number) => [number, number] | null = () => null): THREE.Group {
   const house = batch();
   const ruko = batch();
   const upper = batch();
   const hip = batch();
   const flat = batch();
+  const yards = batch(); // own mesh: polygon-offset onto the terrain like the sidewalks
   const color = new THREE.Color();
   for (const b of buildings) {
     if (b.p.length < 3) continue;
@@ -173,13 +275,30 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     const a = area(b.p);
     const wall = color.setHex(WALLS[seed % WALLS.length]);
     const isRuko = !b.r && b.h <= 3 * FLOOR && a <= 600;
-    const groundBatch = b.r === 'hip' ? house : isRuko ? ruko : upper;
+    const groundBatch = b.r === 'hip' || b.r === 'gable' ? house : isRuko ? ruko : upper;
     push(groundBatch, wallQuads(b.p, Math.min(h, FLOOR + SINK), y0, groundBatch === house ? 3 * WINDOW_W : WINDOW_W), wall);
     if (h > FLOOR + SINK) push(upper, wallQuads(b.p, h - FLOOR - SINK, y0 + FLOOR + SINK), wall);
     const top = y0 + h;
-    if (b.r === 'hip') {
+    if (b.t) { // podium + tower: the tower's walls continue the upper-storey texture, its own flat cap on top
+      const ring = towerRing(orientedBox(b.p));
+      push(upper, wallQuads(ring, b.t, top), wall);
+      push(flat, flatCap(ring, top + b.t), color.setHex(FLAT_ROOFS[(seed >>> 8) % FLAT_ROOFS.length]));
+    }
+    if (b.r === 'hip' || b.r === 'gable') {
       const box = orientedBox(b.p);
-      push(hip, hipRoof(box, top, Math.min(4, Math.max(1.2, 0.3 * box.short))), color.setHex(HIP_ROOFS[(seed >>> 8) % HIP_ROOFS.length]));
+      const roof = hipRoof(box, top, Math.min(4, Math.max(1.2, 0.3 * box.short)), b.r === 'gable');
+      const tile = color.setHex(HIP_ROOFS[(seed >>> 8) % HIP_ROOFS.length]);
+      push(hip, roof, tile);
+      if (roof.ends) push(flat, roof.ends, wall);
+      // rumah Jawa: a second, lower skirt roof (emper) wraps the teras and carport of wider 1-storey houses
+      const emper = b.h <= FLOOR && box.short >= 7;
+      if (emper) push(hip, hipRoof(box, top - 1.0, 0.6, false, EMPER), tile);
+      const front = frontSide(box, roadEscape);
+      if (front) { // pagar on the kerb (sunk SINK into the slope), cement halaman behind it, teras pillars under the emper
+        push(flat, fence(front, ground.y(front.fx, front.fz) - SINK), color.setHex(FENCE));
+        push(yards, yard(front, (x, z) => ground.y(x, z)), color.setHex(PAVING));
+        if (emper && front.off >= 2.2) push(flat, pillars(front, y0 + SINK, top - 1.0), wall);
+      }
     } else {
       push(flat, flatCap(b.p, top), color.setHex(FLAT_ROOFS[(seed >>> 8) % FLAT_ROOFS.length]));
       if (b.r === 'dome') {
@@ -205,6 +324,7 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     [upper, textured(upperTexture())],
     [hip, textured(tileTexture())],
     [flat, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide })],
+    [yards, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })],
   ];
   for (const [b, mat] of meshes) {
     const mesh = new THREE.Mesh(toGeometry(b), mat);

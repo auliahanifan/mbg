@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wallQuads, flatCap, hipRoof } from './buildings';
+import { wallQuads, flatCap, hipRoof, towerRing, frontSide, fence, yard, pillars } from './buildings';
 
 const ys = (p: number[]) => p.filter((_, i) => i % 3 === 1);
 
@@ -34,5 +34,62 @@ describe('hipRoof', () => {
       expect(Math.abs(x)).toBeCloseTo(2); // (5.6 − 3.6)
       expect(z).toBeCloseTo(0);
     }
+  });
+});
+
+describe('gable roof', () => {
+  it('runs the ridge the full length and returns the end triangles separately', () => {
+    const g = hipRoof({ cx: 0, cz: 0, ux: 1, uz: 0, long: 10, short: 6 }, 3.2, 2, true);
+    expect(g.indices).toHaveLength(6 * 3); // 2 slopes + underside, no hips
+    expect(g.ends!.indices).toHaveLength(2 * 3);
+    const ridge = Array.from({ length: g.positions.length / 3 }, (_, i) => g.positions.slice(i * 3, i * 3 + 3)).filter((p) => p[1] === 5.2);
+    for (const [x] of ridge) expect(Math.abs(x)).toBeCloseTo(5.6);
+  });
+});
+
+describe('towerRing', () => {
+  it('is a rectangle centred on the box, no wider than the caps', () => {
+    const r = towerRing({ cx: 10, cz: 5, ux: 0, uz: 1, long: 200, short: 100 });
+    expect(r).toHaveLength(4);
+    const xs = r.map(([x]) => x);
+    const zs = r.map(([, z]) => z);
+    expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(45); // long axis is +z here
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(28);
+    expect((Math.max(...xs) + Math.min(...xs)) / 2).toBeCloseTo(10);
+  });
+});
+
+describe('frontSide + fence + yard + pillars', () => {
+  const box = { cx: 0, cz: 0, ux: 1, uz: 0, long: 10, short: 6 };
+  // road to the +z side: probe at z = 8 is 2 m short of a corridor edge at z = 10 → escape (0, +2), kerb line at z = 3 + 5 + 2 − 0.5
+  const f = frontSide(box, (_x, z) => (z > 5 ? [0, 2] : null))!;
+  it('kerb line sits 0.5 m outside the corridor edge on the road-facing side', () => {
+    expect(f.fz).toBeCloseTo(9.5);
+    expect(f.off).toBeCloseTo(6.5);
+    expect(f.nx).toBeCloseTo(0); expect(f.nz).toBeCloseTo(1);
+    expect(frontSide(box, () => null)).toBeNull();
+    expect(frontSide(box, (_x, z) => (z > 5 ? [0, -6] : null))!.off).toBeCloseTo(0.8); // probe deep inside a corridor: never closer than 0.8 m
+  });
+  it('fence spans the front with a gate gap', () => {
+    const g = fence(f, 0);
+    const zs = g.positions.filter((_, i) => i % 3 === 2);
+    expect(Math.min(...zs)).toBeCloseTo(9.4);
+    expect(Math.max(...zs)).toBeCloseTo(9.6);
+    expect(Math.max(...g.positions.filter((_, i) => i % 3 === 1))).toBeCloseTo(1.35);
+    const xs = g.positions.filter((_, i) => i % 3 === 0);
+    expect(Math.min(...xs)).toBeCloseTo(-5);
+    expect(Math.max(...xs)).toBeCloseTo(5);
+    expect(xs.some((x) => Math.abs(x - 1.4) < 1e-6)).toBe(true); // gate edge
+  });
+  it('yard fills wall → kerb, pillars stand 1.6 m out from the wall', () => {
+    const y = yard(f, () => 0);
+    const zs = y.positions.filter((_, i) => i % 3 === 2);
+    expect(Math.min(...zs)).toBeCloseTo(3);
+    expect(Math.max(...zs)).toBeCloseTo(9.5);
+    const p = pillars(f, 0, 2.2);
+    expect(p.positions).toHaveLength(3 * 20 * 3);
+    const pz = p.positions.filter((_, i) => i % 3 === 2);
+    expect(Math.min(...pz)).toBeCloseTo(4.6 - 0.11);
+    expect(Math.max(...p.positions.filter((_, i) => i % 3 === 1))).toBe(2.2);
   });
 });
