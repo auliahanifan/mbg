@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import type { CityData, CityPoi } from '../world/osm';
-import { HALF_SIZE } from '../world/osm';
+import { HALF_SIZE, pointInRing, type CityData, type CityPoi } from '../world/osm';
+
 import { FLAT, type Ground } from '../world/terrain';
 import { offsetRing } from './buildings';
 import { disc, lift, merge, ribbon } from './roads';
@@ -125,11 +125,11 @@ function letters(text: string, w: number): THREE.Group {
 }
 
 /**
- * Alun-alun Purwokerto after its 2022 makeover: a paved circular plaza in the middle of the lawn with four walkways to
- * the streets, the big old beringin trees at the corners and the ALUN-ALUN PURWOKERTO letters on the south side facing
- * Jl. Jenderal Sudirman. `long`/`short` are the lawn's extents (metres), the walkways run along its axes.
+ * Alun-alun Purwokerto: a paved circular plaza in the middle of the lawn with four walkways to the streets, the big old
+ * beringin trees at the corners and the ALUN-ALUN PURWOKERTO letters on the south side facing Jl. Jenderal Sudirman.
+ * Centre and extents come from OSM's own `leisure=park` ring, so the plaza is laid out on the real lawn.
  */
-function alunAlun(x: number, z: number, ground: Ground, long = 124, short = 110): THREE.Group {
+function alunAlun(x: number, z: number, ground: Ground, long: number, short: number): THREE.Group {
   const g = new THREE.Group();
   const y = lift(ground, 0.05);
   const L = long / 2 - 8;
@@ -190,7 +190,15 @@ export function buildLandmarks(pois: CityPoi[], ground: Ground = FLAT, areas: No
     g.add(label);
     if (p.id === 'M') g.add(menaraTeratai(p.x, y, p.z));
     if (p.id === 'G') for (const a of areas.filter((a) => a.k === 'stadium')) g.add(stadium(a.p, ground)); // Stadion Satria on its own OSM outline
-    if (p.id === 'A') g.add(alunAlun(-672, 745, ground, 112)); // the lawn polygon (x −726…−617, z 688…~800); the POI pin sits a little off centre
+    if (p.id === 'A') { // the lawn is OSM's park ring: take its own centre and extents rather than hard-coded ones
+      const lawn = areas.find((a) => a.k === 'grass' && pointInRing(p.x, p.z, a.p));
+      if (lawn) {
+        const xs = lawn.p.map((q) => q[0]);
+        const zs = lawn.p.map((q) => q[1]);
+        const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+        g.add(alunAlun((x0 + x1) / 2, (z0 + z1) / 2, ground, z1 - z0, x1 - x0));
+      }
+    }
   }
   g.add(gunungSlamet(ground.y(0, -HALF_SIZE)));
   return g;

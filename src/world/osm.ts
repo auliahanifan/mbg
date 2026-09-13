@@ -41,10 +41,11 @@ export type OsmElement =
   | { type: 'way'; id: number; nodes: number[]; tags?: Record<string, string> };
 
 const POIS: (Omit<CityPoi, 'x' | 'z'> & { lat: number; lon: number })[] = [
-  { id: 'K', name: 'SPPG Polresta Banyumas', kind: 'kitchen', lat: -7.40394, lon: 109.23185 },
+  // every one of these is the centroid of the OSM way that carries the name, so the pin lands on the real building
+  { id: 'K', name: 'SPPG Polresta Banyumas', kind: 'kitchen', lat: -7.40394, lon: 109.23185 }, // way "Kepolisian Resort Banyumas"
   { id: '1', name: 'SDN 1 Bancarkembar', kind: 'school', lat: -7.41087, lon: 109.24605 },
-  { id: '2', name: 'SDN 1 Sokanegara', kind: 'school', lat: -7.41809, lon: 109.23318 },
-  { id: '3', name: 'SDN 1 Kranji', kind: 'school', lat: -7.42402, lon: 109.23991 },
+  { id: '2', name: 'SD Negeri 1 dan 2 Sokanegara', kind: 'school', lat: -7.41809, lon: 109.23318 }, // OSM's own name for it
+  { id: '3', name: 'SD Negeri 1-2-3-9 Kranji', kind: 'school', lat: -7.42402, lon: 109.23991 }, // OSM's own name for it
   { id: 'A', name: 'Alun-alun Purwokerto', kind: 'landmark', lat: -7.42439, lon: 109.23012 },
   { id: 'M', name: 'Menara Teratai', kind: 'landmark', lat: -7.43145, lon: 109.2326 },
   { id: 'S', name: 'Stasiun Purwokerto', kind: 'landmark', lat: -7.41946, lon: 109.22184 },

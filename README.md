@@ -17,7 +17,17 @@ Untuk melihat sudut kota tertentu saat mengembangkan: `http://localhost:5173/?at
 
 ## Kota
 
-Jalan & gedung dari OSM; `clearRoads` (`src/world/osm.ts`) mendorong setiap dinding keluar dari aspal **dan trotoar 1,2 m** (test regresi di `osm.test.ts` memeriksa seluruh data Purwokerto). Di atasnya: rumah Jawa beratap genteng limasan/pelana dengan pagar & teras, ruko dengan papan nama warna-warni, **nama toko/bank/sekolah asli dari OSM** sebagai papan nama (`src/render/signs.ts`), masjid berkubah, gereja beratap pelana, Alun-alun hasil renovasi (plaza, beringin, huruf ALUN-ALUN PURWOKERTO), Menara Teratai, GOR Satria, Gunung Slamet di utara. Trotoar diisi **pejalan kaki** (`src/people`) yang berjalan di sisi kiri, menyeberang di simpang, lari kalau ditabrak dan terpental kalau kena mobil, plus **motor parkir** di depan setiap ruko (`src/render/parked.ts`), tenda PKL, tiang listrik, dan lampu lalu lintas.
+Semuanya berangkat dari data, bukan ingatan: kalau peta diam, game-nya juga tidak mengarang.
+
+**Dari OSM apa adanya.** Jalan & gedung; lebar jalan dari tag `width` lalu `lanes` (180 ruas punya `lanes`), tabel per kelas cuma dipakai kalau peta diam; ruas `oneway` tidak digambari marka tengah. `clearRoads` (`src/world/osm.ts`) mendorong setiap dinding keluar dari aspal **dan trotoar 1,2 m** (test regresi di `osm.test.ts` memeriksa seluruh data Purwokerto). Tinggi gedung memakai `height`/`building:levels` kalau ada (18 gedung punya). Nama toko/bank/sekolah asli jadi papan nama (`src/render/signs.ts`): 135 dari tag `name` gedung, ditambah node POI yang jatuh **di dalam** footprint-nya atau ≤ 12 m darinya (`nameFromPois`) — di luar itu gedung dibiarkan tanpa nama daripada salah label. Gedung yang OSM sebut sekolah/RS/kantor/tempat ibadah ditandai `civic` dan tidak pernah diberi etalase toko.
+
+**Landmark, dengan sumbernya.** Stadion Satria digambar di atas ring `leisure=stadium` aslinya (149 × 205 m). Alun-alun memakai ring `leisure=park`-nya sendiri untuk titik tengah dan ukuran. Menara Pandang Teratai 117 m dengan dek observasi + jembatan kaca di 70–80 m ([Wikipedia](https://id.wikipedia.org/wiki/Menara_Pandang_Teratai_Purwokerto)). Gunung Slamet memakai node OSM-nya (−7,2414693 109,2149699, ele 3428): 19,6 km pada bearing 353°, digambar di 4200 m dengan skala yang sama supaya ukuran sudut dan arahnya persis. Semua pin misi adalah centroid way OSM yang membawa namanya — SPPG ada di `Kepolisian Resort Banyumas`. Beberapa gedung yang OSM-nya kosong dicantumkan tangan di tabel `KNOWN`.
+
+**Tipikal, bukan klaim per gedung.** Yang berikut ini default render karena peta tidak merekamnya, dan berlaku umum di kota Jawa: lantai kampung (tanah padat/plester) di sekeliling tiap footprint, jadi rumput hanya tersisa di taman, sawah, dan lapangan; rumah beratap genteng limasan/pelana dengan pagar & teras; tiap blok atap datar ≤ 3 lantai yang menghadap jalan jadi deret ruko dengan etalase, papan nama per unit ~5,5 m, dan kanopi di atas trotoar; parapet + tandon air di tiap dak beton; masjid berkubah, gereja beratap pelana. Gapura hanya dipasang di mulut jalan yang **namanya memang "Gang …"** menurut OSM (28 titik), bukan di tiap gang tebakan. Pohon peneduh di kerb jalan ≥ 8 m.
+
+Trotoar diisi **pejalan kaki** (`src/people`) yang berjalan di sisi kiri, menyeberang di simpang, lari kalau ditabrak dan terpental kalau kena mobil, plus **motor parkir** di depan setiap ruko (`src/render/parked.ts`), tenda PKL, tiang listrik, dan lampu lalu lintas. Lalu lintas 70 kendaraan dalam radius respawn, separuhnya motor.
+
+Belum terpakai: 11 gedung OSM yang dipetakan sebagai relasi multipolygon (kami hanya membaca `way`).
 
 ## Deploy ke Vercel
 
