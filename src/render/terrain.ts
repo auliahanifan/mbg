@@ -4,7 +4,7 @@ import { densify, type Ground } from '../world/terrain';
 import { ribbon, merge, lift, grimeTexture, type Geo } from './roads';
 
 const AREA: Record<NonNullable<CityData['areas']>[number]['k'], string> = {
-  grass: '#647f3a', wood: '#46612e', farm: '#8c9a4c', water: '#4f6f72', sand: '#b3a47c', paved: '#7d7c78',
+  grass: '#647f3a', wood: '#46612e', farm: '#8c9a4c', water: '#4f6f72', sand: '#b3a47c', paved: '#7d7c78', stadium: '#4f7a33',
 };
 const SOIL = '#6a6b44';
 const BUILT = '#8b8274'; // tanah padat / plester / paving of the kampung floor: what actually lies between Purwokerto's buildings

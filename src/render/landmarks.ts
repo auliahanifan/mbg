@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import type { CityPoi } from '../world/osm';
+import type { CityData, CityPoi } from '../world/osm';
 import { HALF_SIZE } from '../world/osm';
 import { FLAT, type Ground } from '../world/terrain';
+import { offsetRing } from './buildings';
 import { disc, lift, merge, ribbon } from './roads';
 
 const WHITE = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.5 });
@@ -31,27 +32,28 @@ function makeLabel(text: string): THREE.Sprite {
 const GLASS = new THREE.MeshStandardMaterial({ color: 0x5a7d99, roughness: 0.25, metalness: 0.4 });
 
 /**
- * Menara Pandang Teratai (117 m): base pavilion, tapering white shaft to 92 m, the 5-storey glass "bud" at 92–110 m
- * ringed by 8 lotus petals opening outward, the glass-floor deck at 110 m and a spire to 117 m.
+ * Menara Pandang Teratai: 117 m to the top of the mahkota teratai, five levels — the podium carrying the meeting rooms
+ * and the let commercial floors, then the observation floors whose glass-floored bridge sits at 70–80 m, and the lotus
+ * crown of 8 petals opening above them (id.wikipedia.org/wiki/Menara_Pandang_Teratai_Purwokerto).
  */
 function menaraTeratai(x: number, y: number, z: number): THREE.Group {
   const g = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(9, 11, 6, 16), WHITE);
-  base.position.y = 3;
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.6, 86, 12), WHITE);
-  shaft.position.y = 6 + 43;
-  const bud = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 5.5, 18, 20), GLASS);
-  bud.position.y = 92 + 9;
-  const deck = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 8.5, 0.8, 20), WHITE);
-  deck.position.y = 110;
-  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.5, 7, 6), WHITE);
-  spire.position.y = 110 + 3.5;
-  g.add(base, shaft, bud, deck, spire);
-  const petal = new THREE.SphereGeometry(1, 10, 8).scale(2.6, 10, 0.9); // a flat elongated petal
-  for (let i = 0; i < 8; i++) {
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(9, 11, 14, 16), WHITE); // the podium: ground floor + levels 1–2
+  base.position.y = 7;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 3.0, 56, 12), WHITE);
+  shaft.position.y = 14 + 28;
+  const pod = new THREE.Mesh(new THREE.CylinderGeometry(7.5, 6.0, 14, 20), GLASS); // levels 3–4: the observation floors
+  pod.position.y = 70 + 7;
+  const deck = new THREE.Mesh(new THREE.CylinderGeometry(9.0, 9.0, 0.8, 20), WHITE); // the glass-floored bridge ringing them
+  deck.position.y = 75;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.4, 22, 10), WHITE);
+  neck.position.y = 84 + 11;
+  g.add(base, shaft, pod, deck, neck);
+  const petal = new THREE.SphereGeometry(1, 10, 8).scale(3.0, 11, 1.0); // a flat elongated petal
+  for (let i = 0; i < 8; i++) { // mahkota teratai, apex at 117 m
     const a = (i / 8) * Math.PI * 2;
     const m = new THREE.Mesh(petal, WHITE);
-    m.position.set(Math.cos(a) * 8.5, 100, Math.sin(a) * 8.5);
+    m.position.set(Math.cos(a) * 5.5, 106, Math.sin(a) * 5.5);
     m.rotation.set(0, -a, 0);
     m.rotateZ(-0.35); // lean outward like an opening flower
     g.add(m);
@@ -61,19 +63,36 @@ function menaraTeratai(x: number, y: number, z: number): THREE.Group {
   return g;
 }
 
-/** GOR Satria: ~100 × 70 m indoor arena under a low barrel-vault roof (OSM has no footprint for it). */
-function gorSatria(x: number, y: number, z: number): THREE.Group {
+/**
+ * Stadion Satria on its real OSM `leisure=stadium` outline (149 × 205 m): seating raked from the touchline 16 m inside
+ * the ring up to an 11 m back wall on the ring itself. No invented box — the plan is whatever the map says it is.
+ */
+function stadium(ring: [number, number][], ground: Ground): THREE.Group {
   const g = new THREE.Group();
-  const walls = new THREE.Mesh(new THREE.BoxGeometry(100, 10, 70), new THREE.MeshStandardMaterial({ color: 0xe8e2d2, roughness: 0.8 }));
-  walls.position.y = 5;
-  const vault = new THREE.Mesh(
-    new THREE.CylinderGeometry(36, 36, 102, 24, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.4, 1),
-    new THREE.MeshStandardMaterial({ color: 0x4f8a6a, roughness: 0.6, side: THREE.DoubleSide }),
-  );
-  vault.position.y = 10;
-  g.add(walls, vault);
-  g.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
-  g.position.set(x, y, z);
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const inner = offsetRing(ring, -16); // the OSM ring is the stadium's outer edge, so the seating rakes inward to the touchline
+  for (let i = 0; i < ring.length; i++) {
+    const j = (i + 1) % ring.length;
+    const [ax, az] = inner[i];
+    const [bx, bz] = inner[j];
+    const [cx, cz] = ring[j];
+    const [dx, dz] = ring[i];
+    const base = positions.length / 3;
+    // the raked seating plane, from pitch level at the touchline up to 11 m at the back
+    positions.push(ax, ground.y(ax, az) + 0.4, az, bx, ground.y(bx, bz) + 0.4, bz, cx, ground.y(cx, cz) + 11, cz, dx, ground.y(dx, dz) + 11, dz);
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    const w = positions.length / 3; // and the back wall dropping to the ground behind it
+    positions.push(dx, ground.y(dx, dz) + 11, dz, cx, ground.y(cx, cz) + 11, cz, cx, ground.y(cx, cz), cz, dx, ground.y(dx, dz), dz);
+    indices.push(w, w + 1, w + 2, w, w + 2, w + 3);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xd8d3c6, roughness: 0.9, side: THREE.DoubleSide }));
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
   return g;
 }
 
@@ -146,17 +165,23 @@ function alunAlun(x: number, z: number, ground: Ground, long = 124, short = 110)
   return g;
 }
 
-/** Gunung Slamet silhouette beyond the north edge of the map; fog off so it stays a hazy blue shape. */
+/**
+ * Gunung Slamet as it is actually seen from the city. OSM puts the summit at −7.2414693, 109.2149699, ele 3428 — that
+ * is 19.6 km away on a bearing of 353°, and 3348 m above the town. The far plane is 5000 m, so the whole mountain is
+ * drawn at 4200 m along that true bearing and scaled by the same 4200/19627, which leaves its angular size and
+ * direction exactly right; only the cone's 3:1 base-to-height silhouette is a drawing choice. Fog off: a hazy shape.
+ */
+const SLAMET = { x: -502, z: -4170, h: 716, r: 2149 };
 function gunungSlamet(y: number): THREE.Mesh {
   const m = new THREE.Mesh(
-    new THREE.ConeGeometry(900, 300, 9),
+    new THREE.ConeGeometry(SLAMET.r, SLAMET.h, 9),
     new THREE.MeshStandardMaterial({ color: 0x8fa3b8, roughness: 1, flatShading: true, fog: false }),
   );
-  m.position.set(0, y + 150, -2600);
+  m.position.set(SLAMET.x, y + SLAMET.h / 2, SLAMET.z);
   return m;
 }
 
-export function buildLandmarks(pois: CityPoi[], ground: Ground = FLAT): THREE.Group {
+export function buildLandmarks(pois: CityPoi[], ground: Ground = FLAT, areas: NonNullable<CityData['areas']> = []): THREE.Group {
   const g = new THREE.Group();
   for (const p of pois) {
     const label = makeLabel(p.name);
@@ -164,7 +189,7 @@ export function buildLandmarks(pois: CityPoi[], ground: Ground = FLAT): THREE.Gr
     label.position.set(p.x, y + (p.id === 'M' ? 124 : p.id === 'G' ? 30 : 14), p.z);
     g.add(label);
     if (p.id === 'M') g.add(menaraTeratai(p.x, y, p.z));
-    if (p.id === 'G') g.add(gorSatria(p.x, y, p.z));
+    if (p.id === 'G') for (const a of areas.filter((a) => a.k === 'stadium')) g.add(stadium(a.p, ground)); // Stadion Satria on its own OSM outline
     if (p.id === 'A') g.add(alunAlun(-672, 745, ground, 112)); // the lawn polygon (x −726…−617, z 688…~800); the POI pin sits a little off centre
   }
   g.add(gunungSlamet(ground.y(0, -HALF_SIZE)));

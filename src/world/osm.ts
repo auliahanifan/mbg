@@ -24,7 +24,7 @@ export const bbox = () => ({
 
 export interface CityPoi { id: string; name: string; kind: 'kitchen' | 'school' | 'landmark'; x: number; z: number }
 export type Roof = 'hip' | 'gable' | 'dome' | 'joglo';
-export type AreaKind = 'grass' | 'wood' | 'farm' | 'water' | 'sand' | 'paved';
+export type AreaKind = 'grass' | 'wood' | 'farm' | 'water' | 'sand' | 'paved' | 'stadium';
 export type LineKind = 'rail' | 'river' | 'stream';
 export interface CityData {
   nodes: [number, number][];
@@ -178,7 +178,8 @@ export function areaKind(t: Record<string, string>): AreaKind | null {
   if (t.landuse === 'farmland') return 'farm';
   if (t.natural === 'beach' || t.natural === 'sand') return 'sand';
   if (t.amenity === 'parking') return 'paved';
-  if (/^(grass|meadow|cemetery|village_green)$/.test(t.landuse ?? '') || /^(park|garden|pitch|golf_course|stadium|track)$/.test(t.leisure ?? '') || /^(grassland|lawn|scrub)$/.test(t.natural ?? '')) return 'grass';
+  if (t.leisure === 'stadium') return 'stadium'; // its own kind: the renderer rings the real footprint with stands
+  if (/^(grass|meadow|cemetery|village_green)$/.test(t.landuse ?? '') || /^(park|garden|pitch|golf_course|track)$/.test(t.leisure ?? '') || /^(grassland|lawn|scrub)$/.test(t.natural ?? '')) return 'grass';
   return null;
 }
 

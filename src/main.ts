@@ -38,7 +38,7 @@ const ground = makeGround(dem);
 const probe = corridorEscape(data);
 const roadEscape = (x: number, z: number) => probe(x, z, -5); // road within 5 m of the probe → pagar in front of the house
 data.trees = [...(data.trees ?? []), ...streetTrees(city, (x, z) => probe(x, z) !== null)]; // peneduh on every kerb, before the ground and the occupancy grid read the tree list
-ctx.scene.add(buildGround(ground, data.areas ?? [], data.buildings), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildGapura(city, ground), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
+ctx.scene.add(buildGround(ground, data.areas ?? [], data.buildings), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildGapura(city, ground), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground, data.areas ?? []));
 const signals = buildSignals(city);
 const occupancy = rasterize(data.buildings, data.trees ?? []);
 ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
