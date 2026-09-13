@@ -13,6 +13,11 @@ Script data OSM (`node scripts/fetch-osm.mjs`) butuh Node ≥ 23.6 (type strippi
     pnpm build      # tsc + vite build -> dist/
 
 Kontrol: W/A/S/D atau panah, Spasi rem, H klakson, M bisu, R ulang ronde.
+Untuk melihat sudut kota tertentu saat mengembangkan: `http://localhost:5173/?at=x,z,heading` (meter dari pusat peta, heading radian).
+
+## Kota
+
+Jalan & gedung dari OSM; `clearRoads` (`src/world/osm.ts`) mendorong setiap dinding keluar dari aspal **dan trotoar 1,2 m** (test regresi di `osm.test.ts` memeriksa seluruh data Purwokerto). Di atasnya: rumah Jawa beratap genteng limasan/pelana dengan pagar & teras, ruko dengan papan nama warna-warni, **nama toko/bank/sekolah asli dari OSM** sebagai papan nama (`src/render/signs.ts`), masjid berkubah, gereja beratap pelana, Alun-alun hasil renovasi (plaza, beringin, huruf ALUN-ALUN PURWOKERTO), Menara Teratai, GOR Satria, Gunung Slamet di utara. Trotoar diisi **pejalan kaki** (`src/people`) yang berjalan di sisi kiri, menyeberang di simpang, lari kalau ditabrak dan terpental kalau kena mobil, plus **motor parkir** di depan setiap ruko (`src/render/parked.ts`), tenda PKL, tiang listrik, dan lampu lalu lintas.
 
 ## Deploy ke Vercel
 
