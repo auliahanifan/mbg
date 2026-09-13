@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ribbon, disc, dashes, polePoints } from './roads';
+import { ribbon, disc, dashes, polePoints, gapuraSpots } from './roads';
+import { loadCity } from '../world/city';
 
 const xz = (p: number[]) => Array.from({ length: p.length / 3 }, (_, i) => [p[i * 3], p[i * 3 + 2]]);
 
@@ -52,5 +53,22 @@ describe('polePoints', () => {
     expect(p).toHaveLength(3); // at 17.5, 52.5, 87.5
     expect(p[0][0]).toBeCloseTo(17.5);
     expect(p[0][1]).toBeCloseTo(4); // left of an eastbound road (+z)
+  });
+});
+
+describe('gapuraSpots', () => {
+  const city = () => loadCity({
+    nodes: [[0, 0], [100, 0], [50, 0], [50, 40], [50, 6]], // a wide road west→east, a gang running north off its middle
+    ways: [{ n: [0, 2, 1], w: 10 }, { n: [2, 3], w: 6 }, { n: [2, 4], w: 6 }],
+    buildings: [], pois: [],
+  });
+  it('stands one portal per gang mouth, 6 m in, straddling the gang', () => {
+    const s = gapuraSpots(city());
+    expect(s).toHaveLength(1); // the second gang shares the mouth node, and its 6 m stub is too short anyway
+    expect(s[0]).toMatchObject({ x: 50, z: 6, half: 3.7 });
+    expect(s[0].heading).toBeCloseTo(0); // heading 0 points along +z, into the gang
+  });
+  it('ignores a gang that never meets a wide road', () => {
+    expect(gapuraSpots(loadCity({ nodes: [[0, 0], [0, 40]], ways: [{ n: [0, 1], w: 6 }], buildings: [], pois: [] }))).toHaveLength(0);
   });
 });

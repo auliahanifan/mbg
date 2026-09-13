@@ -245,6 +245,73 @@ export function buildStalls(city: City, ground: Ground = FLAT, blocked: (x: numb
   return g;
 }
 
+const GAPURA_H = 4.6; // underside of the lintel: a gang portal has to clear a pickup
+const GAPURA_IN = 6; // metres in from the mouth, past the bigger road's kerb
+
+/**
+ * Mouths of the gangs: the end of every road ≤ 6 m wide that meets a road ≥ 8 m wide. Returns the portal's centre
+ * GAPURA_IN metres into the small road, its heading along that road, and the half-width it has to straddle.
+ */
+export function gapuraSpots(city: City): { x: number; z: number; heading: number; half: number }[] {
+  const { nodes, ways } = city.data;
+  const wideAt = new Map<number, boolean>();
+  for (const w of ways) if (w.w >= 8) for (const n of w.n) wideAt.set(n, true);
+  const out: { x: number; z: number; heading: number; half: number }[] = [];
+  const seen = new Set<number>();
+  for (const way of ways) {
+    if (way.w > 6 || way.n.length < 2) continue;
+    for (const [end, next] of [[0, 1], [way.n.length - 1, way.n.length - 2]] as const) {
+      const node = way.n[end];
+      if (!wideAt.get(node) || seen.has(node)) continue;
+      const [ax, az] = nodes[node];
+      const [bx, bz] = nodes[way.n[next]];
+      const l = Math.hypot(bx - ax, bz - az);
+      if (l < GAPURA_IN + 2) continue; // too short a stub to stand a portal in
+      seen.add(node);
+      out.push({ x: ax + ((bx - ax) / l) * GAPURA_IN, z: az + ((bz - az) / l) * GAPURA_IN, heading: Math.atan2(bx - ax, bz - az), half: way.w / 2 + 0.7 });
+    }
+  }
+  return out;
+}
+
+/** Gapura merah-putih over every gang mouth: two plastered piers and a lintel banded in the flag's colours. */
+export function buildGapura(city: City, ground: Ground = FLAT): THREE.Group {
+  const spots = gapuraSpots(city);
+  const g = new THREE.Group();
+  if (!spots.length) return g;
+  const pier = new THREE.BoxGeometry(0.4, GAPURA_H, 0.4);
+  const white = new THREE.MeshStandardMaterial({ color: 0xf1efe8, roughness: 0.95 });
+  const red = new THREE.MeshStandardMaterial({ color: 0xc8262c, roughness: 0.9 });
+  const piers = new THREE.InstancedMesh(pier, white, spots.length * 2);
+  const lintels = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.85, 0.34), white, spots.length);
+  const bands = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.3, 0.38), red, spots.length); // the merah stripe under the white board
+  const o = new THREE.Object3D();
+  spots.forEach((s, i) => {
+    const y = ground.y(s.x, s.z);
+    // the portal's tangent is across the road: rotate the pier offsets by the heading
+    const ox = Math.cos(s.heading) * s.half;
+    const oz = -Math.sin(s.heading) * s.half;
+    for (const k of [-1, 1]) {
+      o.position.set(s.x + ox * k, y + GAPURA_H / 2, s.z + oz * k);
+      o.rotation.set(0, s.heading, 0);
+      o.scale.set(1, 1, 1);
+      o.updateMatrix();
+      piers.setMatrixAt(2 * i + (k > 0 ? 1 : 0), o.matrix);
+    }
+    o.position.set(s.x, y + GAPURA_H + 0.42, s.z);
+    o.rotation.set(0, s.heading, 0);
+    o.scale.set(2 * s.half + 0.4, 1, 1);
+    o.updateMatrix();
+    lintels.setMatrixAt(i, o.matrix);
+    o.position.set(s.x, y + GAPURA_H - 0.15, s.z);
+    o.updateMatrix();
+    bands.setMatrixAt(i, o.matrix);
+  });
+  piers.castShadow = lintels.castShadow = bands.castShadow = true;
+  g.add(piers, lintels, bands);
+  return g;
+}
+
 /** Planar world-space UVs (1 repeat per `metres`) so a tiling texture reads the same on every ribbon. */
 export function worldUv(geo: THREE.BufferGeometry, metres: number): THREE.BufferGeometry {
   const p = geo.attributes.position;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createScene, START_HOUR } from './render/scene';
 import { createPost } from './render/post';
-import { buildPoles, buildRoads, buildStalls } from './render/roads';
+import { buildGapura, buildPoles, buildRoads, buildStalls } from './render/roads';
 import { buildBuildings } from './render/buildings';
 import { buildLandmarks } from './render/landmarks';
 import { buildSigns } from './render/signs';
@@ -37,7 +37,7 @@ data.buildings = clearRoads(data); // footprints off the asphalt, before anythin
 const ground = makeGround(dem);
 const probe = corridorEscape(data);
 const roadEscape = (x: number, z: number) => probe(x, z, -5); // road within 5 m of the probe → pagar in front of the house
-ctx.scene.add(buildGround(ground, data.areas ?? [], data.buildings), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
+ctx.scene.add(buildGround(ground, data.areas ?? [], data.buildings), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildGapura(city, ground), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground));
 const signals = buildSignals(city);
 const occupancy = rasterize(data.buildings, data.trees ?? []);
 ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
