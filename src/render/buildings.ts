@@ -13,6 +13,8 @@ const BAND = 0.65; // the signboard band at the top of a ruko's ground floor (ru
 const PARAPET_H = 0.75; // the dwarf wall every flat Indonesian roof is edged with, hiding the roof deck from the street
 const TANDON = [0xe4771f, 0x2f6fb0, 0xd8d5cc]; // tandon air: the orange, blue and white tanks on Purwokerto rooftops
 const CANOPY = 0x8e9297; // seng gelombang / cor kanopi over the shopfront
+const CANOPY_REACH = 2.6; // how far a kanopi cantilevers from the wall at most
+const TROTOAR = 1.2; // width of the walkway the kanopi is allowed to reach out over, but no further
 const DOME = 0x3a9a68;
 const MINARET = 0xf2eee4;
 const WINDOW_W = 3; // metres per facade texture repeat (one window)
@@ -141,15 +143,38 @@ export function bandUnits(ring: [number, number][], h: number, y0: number): { ge
   return out;
 }
 
+export const FACING = 12; // furthest a wall can stand from the corridor and still be fronting the street
+const MAX_YARD = 8; // deeper than this is a compound, not a halaman: pagar and paving are left off
+const PROBE = 0.5; // step used to walk out to the kerb
+const EDGE = 0.2; // the kerb line stops this far short of the corridor edge
+const MIN_OFF = 0.8; // a yard narrower than this is not worth drawing
+const CUTS = [0, 0.05, 0.12, 0.25, 0.4, 0.6, 0.8, 1]; // retractions fitBox tries, as a fraction of the side's half-extent
+
+/**
+ * Distance from (x, z) out along (nx, nz) to the kerb: 0 when the wall stands right on it, which is what a ruko does.
+ * Null only when there is no road within FACING or the point is itself inside the corridor. Walked in PROBE steps
+ * against the corridor as it actually is: corridorEscape's grid buckets one cell (10 m) beyond each segment, so asking
+ * it about a corridor widened by 5 m — which is what this used to do — silently misses segments and lies about
+ * distance. Whether the gap is big enough for a pagar and a halaman is the caller's question, not this one's.
+ */
+export function gapToKerb(x: number, z: number, nx: number, nz: number, onRoad: (x: number, z: number) => boolean): number | null {
+  if (onRoad(x, z)) return null;
+  for (let d = PROBE; d <= FACING; d += PROBE) {
+    if (!onRoad(x + nx * d, z + nz * d)) continue;
+    return Math.max(0, d - PROBE - EDGE); // the last step that was still clear
+  }
+  return null;
+}
+
 export type Front = { fx: number; fz: number; tx: number; tz: number; half: number; nx: number; nz: number; off: number };
 
 /**
- * The road-facing side of a house: the oriented-box side whose outward probe (5 m past the wall) lands near a road
- * corridor. `roadEscape` is corridorEscape's displacement for that probe (null = no road): its component along the
- * outward normal is minus the corridor depth, so `off` (wall → kerb line) lands 0.5 m outside the corridor edge, never
- * under 0.8 m. (fx, fz) is the kerb line's centre, (tx, tz) its direction, `half` its half-length. Null when no side faces a road.
+ * The road-facing side of a house: the oriented-box side that stands within FACING metres of a road corridor, with
+ * `off` the measured wall → kerb distance — 0 for a ruko built out to the kerb, which still very much fronts the
+ * street. `onRoad` is true inside the corridor (asphalt plus kerb and trotoar). (fx, fz) is the kerb line's centre,
+ * (tx, tz) its direction, `half` its half-length. Null when no side faces a road at all.
  */
-export function frontSide(box: OrientedBox, roadEscape: (x: number, z: number) => [number, number] | null): Front | null {
+export function frontSide(box: OrientedBox, onRoad: (x: number, z: number) => boolean): Front | null {
   const { cx, cz, ux, uz } = box;
   const vx = -uz;
   const vz = ux;
@@ -158,12 +183,73 @@ export function frontSide(box: OrientedBox, roadEscape: (x: number, z: number) =
   // each side: outward normal (nx, nz), half-extent along the normal, and the tangent + half-length of the side
   const sides: [number, number, number, number, number, number][] = [[vx, vz, S, ux, uz, L], [-vx, -vz, S, ux, uz, L], [ux, uz, L, vx, vz, S], [-ux, -uz, L, vx, vz, S]];
   for (const [nx, nz, d, tx, tz, half] of sides) {
-    const esc = roadEscape(cx + nx * (d + 5), cz + nz * (d + 5));
-    if (!esc) continue;
-    const off = Math.max(0.8, 5 + esc[0] * nx + esc[1] * nz - 0.5);
+    const off = gapToKerb(cx + nx * d, cz + nz * d, nx, nz, onRoad);
+    if (off === null) continue;
     return { fx: cx + nx * (d + off), fz: cz + nz * (d + off), tx, tz, half, nx, nz, off };
   }
   return null;
+}
+
+const WALK_MAX = 96; // samples per side: a 150 m facade does not need 300 probes to notice a road
+/** True when any point sampled along a→b (every `step` m, at most WALK_MAX of them) satisfies `f`. */
+const walk = (a: [number, number], b: [number, number], step: number, f: (x: number, z: number) => boolean): boolean => {
+  const n = Math.min(WALK_MAX, Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step)));
+  for (let i = 0; i <= n; i++) if (f(a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n)) return true;
+  return false;
+};
+
+/**
+ * `frontSide` measures one gap at the middle of a box side, and the box is the footprint's bounding rectangle, not the
+ * footprint — so on a bending street, or under an L-shaped plan, the pagar, halaman, teras and kanopi it carries still
+ * run out onto the carriageway at the ends. This re-measures the gap every metre along the side and keeps only the
+ * longest stretch that still faces the road without standing in it, re-centring the front on it and taking the
+ * tightest gap along it. Null when no usable stretch is left.
+ */
+export function fitFront(f: Front, onRoad: (x: number, z: number) => boolean): Front | null {
+  const n = Math.min(WALK_MAX, Math.max(2, Math.ceil(f.half)));
+  const reach = Array.from({ length: n + 1 }, (_, i) => {
+    const s = -f.half + (2 * f.half * i) / n;
+    return gapToKerb(f.fx + f.tx * s - f.nx * f.off, f.fz + f.tz * s - f.nz * f.off, f.nx, f.nz, onRoad);
+  });
+  let best = { i0: 0, i1: -1 };
+  for (let i = 0, start = -1; i <= n; i++) {
+    if (reach[i] !== null) { if (start < 0) start = i; if (i - start > best.i1 - best.i0) best = { i0: start, i1: i }; }
+    else start = -1;
+  }
+  if (best.i1 <= best.i0) return null;
+  const at = (i: number) => -f.half + (2 * f.half * i) / n;
+  const half = (at(best.i1) - at(best.i0)) / 2;
+  if (half < 1.5) return null;
+  const off = Math.min(...(reach.slice(best.i0, best.i1 + 1) as number[]));
+  const mid = (at(best.i0) + at(best.i1)) / 2;
+  return { ...f, half, off, fx: f.fx + f.tx * mid - f.nx * (f.off - off), fz: f.fz + f.tz * mid - f.nz * (f.off - off) };
+}
+
+/**
+ * The same problem for roofs: `hipRoof` spans the bounding rectangle plus its eaves, so a limasan over an L-shaped or
+ * skewed plan hangs into the street even though every wall is clear. Retracts whichever of the four sides needs it
+ * until the overhung outline is off the carriageway; eaves over the trotoar are left alone, as they are in real life.
+ * Null when even the deepest retraction leaves the outline on the road — a plot wrapped around a corner, whose
+ * bounding box a street runs straight through. The caller falls back to the footprint, which is always clear.
+ */
+export function fitBox(box: OrientedBox, overhang: number, onRoad: (x: number, z: number) => boolean): OrientedBox | null {
+  let { cx, cz, long, short } = box;
+  const { ux, uz } = box;
+  const [vx, vz] = [-uz, ux];
+  for (const [ax, az, along] of [[ux, uz, false], [-ux, -uz, false], [vx, vz, true], [-vx, -vz, true]] as const) {
+    const [tx, tz] = along ? [ux, uz] : [vx, vz];
+    const reach = (along ? short : long) / 2;
+    const span = ((along ? long : short) / 2 + overhang) * 1.0;
+    for (const [k, frac] of CUTS.entries()) { // the first frac is 0, so a side already clear costs a single walk
+      const cut = frac * reach;
+      const d = reach + overhang - cut;
+      const p = (j: number): [number, number] => [cx + ax * d + tx * j * span, cz + az * d + tz * j * span];
+      if (walk(p(-1), p(1), 0.5, onRoad)) { if (k === CUTS.length - 1) return null; continue; }
+      if (cut) { cx -= ax * (cut / 2); cz -= az * (cut / 2); if (along) short -= cut; else long -= cut; }
+      break;
+    }
+  }
+  return { cx, cz, ux, uz, long: Math.max(0, long), short: Math.max(0, short) };
 }
 
 const concat = (parts: Geo[]): Geo => {
@@ -194,12 +280,12 @@ export function yard(f: Front, y: (x: number, z: number) => number): Geo {
 
 /**
  * Kanopi ruko: the cantilevered slab every Purwokerto shophouse hangs over the trotoar, starting above the signboard
- * at the wall and sloping 0.35 m down to its outer lip, plus a thin fascia so it reads as a slab and not a plane.
+ * at the wall and sloping 0.35 m down to its outer lip `reach` metres out, plus a thin fascia so it reads as a slab
+ * and not a plane. It may overhang the trotoar — that is the point of it — but never the carriageway.
  */
-export function canopy(f: Front, yWall: number): Geo {
-  const d = Math.min(f.off, 2.6);
+export function canopy(f: Front, yWall: number, reach: number): Geo {
   const at = (t: number, out: number): [number, number] => [f.fx + f.tx * t - f.nx * (f.off - out), f.fz + f.tz * t - f.nz * (f.off - out)];
-  const [a, b, c, e] = [at(-f.half, 0), at(f.half, 0), at(f.half, d), at(-f.half, d)];
+  const [a, b, c, e] = [at(-f.half, 0), at(f.half, 0), at(f.half, reach), at(-f.half, reach)];
   const yLip = yWall - 0.35;
   const p = (q: [number, number], y: number) => [q[0], y, q[1]];
   const positions = [...p(a, yWall), ...p(b, yWall), ...p(c, yLip), ...p(e, yLip), ...p(c, yLip - 0.18), ...p(e, yLip - 0.18)];
@@ -318,8 +404,10 @@ function toGeometry(b: Batch): THREE.BufferGeometry {
 /**
  * Five merged meshes: house / ruko ground floors, upper storeys (all textured, vertex-tinted), tiled hip roofs,
  * and plain flat roofs + domes + minarets. Buildings sit SINK below the lowest ground corner so slopes never show a gap.
+ * `clearRoads` guarantees only the walls; `onRoad` (inside the corridor) and `onAsphalt` (past the kerb, on the
+ * carriageway) are what keep everything the bounding box carries — eaves, pagar, halaman, kanopi, tandon — off it too.
  */
-export function buildBuildings(buildings: CityData['buildings'], ground: Ground = FLAT, roadEscape: (x: number, z: number) => [number, number] | null = () => null): THREE.Group {
+export function buildBuildings(buildings: CityData['buildings'], ground: Ground = FLAT, onRoad: (x: number, z: number) => boolean = () => false, onAsphalt: (x: number, z: number) => boolean = () => false): THREE.Group {
   const house = batch();
   const ruko = batch();
   const upper = batch();
@@ -337,16 +425,18 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     const a = area(b.p);
     const wall = color.setHex(WALLS[seed % WALLS.length]);
     const box = orientedBox(b.p);
-    const front = frontSide(box, roadEscape);
+    const raw = frontSide(box, onRoad);           // does this building face a street at all
+    const front = raw && fitFront(raw, onRoad);   // and which stretch of that side may carry something
     // Every flat-roofed block up to 3 storeys standing on a street in Purwokerto is a ruko row, however long its
-    // footprint: shopfront, papan nama, kanopi over the trotoar. Buildings OSM calls a school, hospital, office or
-    // place of worship are exempt — they are not shops — and so are the deep blocks (malls, halls).
-    const isRuko = !b.r && !b.civic && b.h <= 3 * FLOOR && !!front && box.short <= 40;
+    // footprint: shopfront, papan nama, kanopi over the trotoar. Facing a street is enough to earn a shopfront; only
+    // the kanopi needs the fitted stretch, since it is the part that could reach out over the road. Buildings OSM
+    // calls a school, hospital, office or place of worship are exempt — they are not shops — as are deep blocks.
+    const isRuko = !b.r && !b.civic && b.h <= 3 * FLOOR && !!raw && box.short <= 40;
     const groundBatch = b.r === 'hip' || b.r === 'gable' || b.r === 'joglo' ? house : isRuko ? ruko : upper;
     push(groundBatch, wallQuads(b.p, Math.min(h, FLOOR + SINK), y0, groundBatch === house ? 3 * WINDOW_W : WINDOW_W), wall);
     if (isRuko) {
       for (const u of bandUnits(offsetRing(b.p, 0.04), BAND, y0 + FLOOR - BAND)) push(flat, u.geo, board.setHex(SIGNBOARDS[u.seed % SIGNBOARDS.length])); // a colour per shop unit over the texture's red band
-      if (front!.off >= 1.2) push(flat, canopy(front!, y0 + FLOOR + SINK), color.setHex(CANOPY));
+      if (front) push(flat, canopy(front, y0 + FLOOR + SINK, Math.min(CANOPY_REACH, front.off + TROTOAR)), color.setHex(CANOPY));
     }
     if (h > FLOOR + SINK) push(upper, wallQuads(b.p, h - FLOOR - SINK, y0 + FLOOR + SINK), wall);
     const top = y0 + h;
@@ -357,26 +447,36 @@ export function buildBuildings(buildings: CityData['buildings'], ground: Ground 
     }
     if (b.r === 'joglo') { // tiered Javanese pavilion roof: a wide shallow skirt, then the steep brunjung over the middle
       const tile = color.setHex(HIP_ROOFS[(seed >>> 8) % HIP_ROOFS.length]);
-      push(hip, hipRoof(box, top, 1.6, false, 1.5), tile);
-      push(hip, hipRoof({ ...box, long: box.long * 0.55, short: box.short * 0.55 }, top + 1.6, 0.42 * box.short), tile);
+      const skirt = fitBox(box, 1.5, onAsphalt);
+      if (skirt) {
+        push(hip, hipRoof(skirt, top, 1.6, false, 1.5), tile);
+        push(hip, hipRoof({ ...skirt, long: skirt.long * 0.55, short: skirt.short * 0.55 }, top + 1.6, 0.42 * skirt.short), tile);
+      } else push(hip, flatCap(b.p, top), tile);
     } else if (b.r === 'hip' || b.r === 'gable') {
-      const roof = hipRoof(box, top, Math.min(4, Math.max(1.2, 0.3 * box.short)), b.r === 'gable');
+      const eaves = fitBox(box, OVERHANG, onAsphalt);
       const tile = color.setHex(HIP_ROOFS[(seed >>> 8) % HIP_ROOFS.length]);
-      push(hip, roof, tile);
-      if (roof.ends) push(flat, roof.ends, wall);
+      if (eaves) {
+        const roof = hipRoof(eaves, top, Math.min(4, Math.max(1.2, 0.3 * eaves.short)), b.r === 'gable');
+        push(hip, roof, tile);
+        if (roof.ends) push(flat, roof.ends, wall);
+      } else push(hip, flatCap(b.p, top), tile); // a street runs through the bounding box: cap the footprint itself
       // rumah Jawa: a second, lower skirt roof (emper) wraps the teras and carport of wider 1-storey houses
-      const emper = b.h <= FLOOR && box.short >= 7;
-      if (emper) push(hip, hipRoof(box, top - 1.0, 0.6, false, EMPER), tile);
-      if (front) { // pagar on the kerb (sunk SINK into the slope), cement halaman behind it, teras pillars under the emper
+      const skirt = eaves && b.h <= FLOOR && box.short >= 7 ? fitBox(box, EMPER, onAsphalt) : null;
+      if (skirt) push(hip, hipRoof(skirt, top - 1.0, 0.6, false, EMPER), tile);
+      if (front && front.off >= MIN_OFF && front.off <= MAX_YARD) { // pagar on the kerb (sunk SINK into the slope), cement halaman behind it, teras pillars under the emper
         push(flat, fence(front, ground.y(front.fx, front.fz) - SINK), color.setHex(FENCE));
         push(yards, yard(front, (x, z) => ground.y(x, z)), color.setHex(PAVING));
-        if (emper && front.off >= 2.2) push(flat, pillars(front, y0 + SINK, top - 1.0), wall);
+        if (skirt && front.off >= 2.2) push(flat, pillars(front, y0 + SINK, top - 1.0), wall);
       }
     } else {
       push(flat, flatCap(b.p, top), color.setHex(FLAT_ROOFS[(seed >>> 8) % FLAT_ROOFS.length]));
       if (!b.t && !b.r) { // dak beton: a parapet round the edge and a tandon air in one corner
         push(flat, wallQuads(b.p, PARAPET_H, top, WINDOW_W), wall);
-        if (box.short >= 5 && box.long >= 5) tandons.push([box.cx + box.ux * (box.long / 2 - 1.6) - box.uz * (box.short / 2 - 1.6), top + PARAPET_H, box.cz + box.uz * (box.long / 2 - 1.6) + box.ux * (box.short / 2 - 1.6), seed]);
+        if (box.short >= 5 && box.long >= 5) {
+          const tx = box.cx + box.ux * (box.long / 2 - 1.6) - box.uz * (box.short / 2 - 1.6); // a box corner, so it can fall outside an L-shaped plan
+          const tz = box.cz + box.uz * (box.long / 2 - 1.6) + box.ux * (box.short / 2 - 1.6);
+          if (!onAsphalt(tx, tz)) tandons.push([tx, top + PARAPET_H, tz, seed]);
+        }
       }
       if (b.r === 'dome') {
         push(flat, dome(box.cx, box.cz, top, Math.min(7, Math.sqrt(a) / 3)), color.setHex(DOME));

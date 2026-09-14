@@ -15,6 +15,8 @@ const MIN_ARMS = 3;
 const MERGE = 40;      // metres: one junction gets one cycle, not a light per corner of a split carriageway
 const STOP_BACK = 2.5; // stop line this far back from the far kerb line
 const KERB = 1.6;      // pole this far outside the asphalt edge, on the sidewalk
+const BACKS = [0, 2, 4, 6, 8, 10, 13, 16, 20, 25]; // metres further back from the junction to try when the kerb spot is in the crossing road
+const OUTS = [0, 1, 2, 3, 4.5, 6, 8];              // and further out onto the verge
 const OVER = 0.05;     // slack so a car held exactly on the line doesn't float over it on rounding
 const POLE_MASS = 180; // steel pole and head: a van shrugs it off, and it is light enough to cartwheel
 const POLE_RADIUS = 0.3;
@@ -42,7 +44,7 @@ const key = (edge: number, toB: boolean) => edge * 2 + (toB ? 1 : 0);
 export const approachAt = (s: Signals, edge: number, toB: boolean): Approach | undefined => s.byEdge.get(key(edge, toB));
 
 /** Signalises junctions where at least three tertiary-or-wider arms meet, one per 40 m. Pure. */
-export function buildSignals(city: City): Signals {
+export function buildSignals(city: City, onAsphalt: (x: number, z: number) => boolean = () => false): Signals {
   const { nodes } = city.data;
   const junctions: number[] = [];
   city.adj
@@ -65,13 +67,21 @@ export function buildSignals(city: City): Signals {
     for (const { ei, e, ux, uz } of arms) {
       const line = e.w / 2 + STOP_BACK;
       const off = e.w / 2 + KERB;
+      const at = (back: number, out: number): [number, number] => [
+        nodes[n][0] + ux * (line + back) - uz * (off + out), // left kerb of the approaching lane (left-hand traffic)
+        nodes[n][1] + uz * (line + back) + ux * (off + out),
+      ];
+      // At a crossroads the kerb spot of one arm lands in the carriageway of another, so step back down the
+      // approach — and onto the verge — until the pole is out of every road. The stop line stays where it was.
+      let pos = at(BACKS[BACKS.length - 1], OUTS[OUTS.length - 1]);
+      outer: for (const back of BACKS) for (const out of OUTS) { const q = at(back, out); if (!onAsphalt(q[0], q[1])) { pos = q; break outer; } }
       approaches.push({
         node: n,
         edge: ei,
         group: Math.abs(ux * ref.ux + uz * ref.uz) >= 0.5 ? 0 : 1, // within 60° of the main axis = same phase
         offset,
-        x: nodes[n][0] + ux * line - uz * off, // left kerb of the approaching lane (left-hand traffic)
-        z: nodes[n][1] + uz * line + ux * off,
+        x: pos[0],
+        z: pos[1],
         heading: Math.atan2(ux, uz),
         line,
       });

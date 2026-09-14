@@ -295,9 +295,13 @@ export function gapuraSpots(city: City): { x: number; z: number; heading: number
   return out;
 }
 
-/** Gapura merah-putih over every gang mouth: two plastered piers and a lintel banded in the flag's colours. */
-export function buildGapura(city: City, ground: Ground = FLAT): THREE.Group {
-  const spots = gapuraSpots(city);
+/** Gapura merah-putih over a gang mouth: two plastered piers and a lintel banded in the flag's colours. */
+export function buildGapura(city: City, ground: Ground = FLAT, onAsphalt: (x: number, z: number) => boolean = () => false): THREE.Group {
+  // a gang mouth can sit close enough to the bigger road that a pier would land in it: then there is no portal
+  const spots = gapuraSpots(city).filter((s) => {
+    const [ox, oz] = [Math.cos(s.heading) * s.half, -Math.sin(s.heading) * s.half];
+    return !onAsphalt(s.x + ox, s.z + oz) && !onAsphalt(s.x - ox, s.z - oz);
+  });
   const g = new THREE.Group();
   if (!spots.length) return g;
   const pier = new THREE.BoxGeometry(0.4, GAPURA_H, 0.4);

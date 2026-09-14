@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { ribbon, disc, dashes, polePoints, gapuraSpots } from './roads';
+import purwokerto from '../../public/purwokerto.json';
+import { ribbon, disc, dashes, polePoints, gapuraSpots, streetTrees } from './roads';
 import { loadCity } from '../world/city';
+import { buildSignals } from '../traffic/signals';
+import { clearRoads, corridorEscape, type CityData } from '../world/osm';
 
 const xz = (p: number[]) => Array.from({ length: p.length / 3 }, (_, i) => [p[i * 3], p[i * 3 + 2]]);
 
@@ -76,5 +79,34 @@ describe('gapuraSpots', () => {
     expect(gapuraSpots(off())).toHaveLength(0); // unnamed stub
     expect(gapuraSpots(off('Jalan Penjara'))).toHaveLength(0); // a named street is not a gang
     expect(gapuraSpots(off('Gg. Melati'))).toHaveLength(1);
+  });
+});
+
+describe('nothing but traffic stands on the carriageway', () => {
+  const real = purwokerto as unknown as CityData;
+  real.buildings = clearRoads(real);
+  const city = loadCity(real);
+  const probe = corridorEscape(real);
+  const onRoad = (x: number, z: number) => probe(x, z) !== null;
+  const onAsphalt = (x: number, z: number) => probe(x, z, 1.4) !== null; // past the kerb and the 1.2 m trotoar
+
+  it('places no gapura, signal, tree, tenda or tiang in a road, across the whole city', () => {
+    const piers = (s: ReturnType<typeof gapuraSpots>[number]): [number, number][] => {
+      const [ox, oz] = [Math.cos(s.heading) * s.half, -Math.sin(s.heading) * s.half];
+      return [[s.x + ox, s.z + oz], [s.x - ox, s.z - oz]];
+    };
+    // buildGapura drops a portal whose piers would land in the bigger road rather than shifting it; check the survivors
+    const kept = gapuraSpots(city).filter((s) => !piers(s).some((p) => onAsphalt(p[0], p[1])));
+    const trees = [...(real.trees ?? []), ...streetTrees(city, onRoad)].filter((p) => !onAsphalt(p[0], p[1]));
+    const kerbWalk = (every: number, kerb: number, minW: number) => real.ways.flatMap((w) =>
+      w.w >= minW ? polePoints(w.n.map((i) => real.nodes[i]), w.w / 2, every, kerb).filter((p) => !onRoad(p[0], p[1])) : []);
+    expect({
+      gapura: kept.flatMap(piers).filter((p) => onAsphalt(p[0], p[1])).length,
+      gapuraKept: kept.length > 20,
+      signals: buildSignals(city, onAsphalt).approaches.filter((a) => onAsphalt(a.x, a.z)).length,
+      trees: trees.filter((p) => onAsphalt(p[0], p[1])).length,
+      tenda: kerbWalk(90, 1.4, 8).filter((p) => onAsphalt(p[0], p[1])).length,
+      tiang: kerbWalk(35, 1.0, 6).filter((p) => onAsphalt(p[0], p[1])).length,
+    }).toEqual({ gapura: 0, gapuraKept: true, signals: 0, trees: 0, tenda: 0, tiang: 0 });
   });
 });

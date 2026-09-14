@@ -74,7 +74,7 @@ export function frontEdge(ring: [number, number][], box: OrientedBox, f: Front):
 }
 
 /** Name boards on every named building that fronts a road: one merged mesh, every board a quad into the text atlas. */
-export function buildSigns(buildings: CityData['buildings'], ground: Ground = FLAT, roadEscape: (x: number, z: number) => [number, number] | null = () => null): THREE.Mesh {
+export function buildSigns(buildings: CityData['buildings'], ground: Ground = FLAT, onRoad: (x: number, z: number) => boolean = () => false): THREE.Mesh {
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
@@ -82,7 +82,7 @@ export function buildSigns(buildings: CityData['buildings'], ground: Ground = FL
   for (const b of buildings) {
     if (!b.name || b.r === 'hip' || b.r === 'gable' || b.p.length < 3 || names.length >= COLS * ROWS) continue;
     const box = orientedBox(b.p);
-    const f = frontSide(box, roadEscape);
+    const f = frontSide(box, onRoad);
     if (!f) continue;
     const edge = frontEdge(b.p, box, f);
     if (!edge) continue;

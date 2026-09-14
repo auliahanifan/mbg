@@ -36,10 +36,13 @@ const city = loadCity(data);
 data.buildings = clearRoads(data); // footprints off the asphalt, before anything renders or collides with them
 const ground = makeGround(dem);
 const probe = corridorEscape(data);
-const roadEscape = (x: number, z: number) => probe(x, z, -5); // road within 5 m of the probe → pagar in front of the house
-data.trees = [...(data.trees ?? []), ...streetTrees(city, (x, z) => probe(x, z) !== null)]; // peneduh on every kerb, before the ground and the occupancy grid read the tree list
-ctx.scene.add(buildGround(ground, data.areas ?? [], data.buildings), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, (x, z) => probe(x, z) !== null), buildGapura(city, ground), buildBuildings(data.buildings, ground, roadEscape), buildSigns(data.buildings, ground, roadEscape), buildLandmarks(data.pois, ground, data.areas ?? []));
-const signals = buildSignals(city);
+const onRoad = (x: number, z: number) => probe(x, z) !== null; // inside a road corridor: asphalt plus its kerb and trotoar
+const onAsphalt = (x: number, z: number) => probe(x, z, 1.4) !== null; // past the 1.4 m kerb + trotoar margin: out on the carriageway
+// peneduh on every kerb, plus the OSM trees — minus any that stand in a carriageway, whether mapped there or
+// scattered there by the park/wood fill. Done before the ground and the occupancy grid read the tree list.
+data.trees = [...(data.trees ?? []), ...streetTrees(city, onRoad)].filter(([x, z]) => !onAsphalt(x, z));
+ctx.scene.add(buildGround(ground, data.areas ?? [], data.buildings), buildTerrain(data, ground), buildRoads(city, ground), buildPoles(city, ground, onRoad), buildGapura(city, ground, onAsphalt), buildBuildings(data.buildings, ground, onRoad, onAsphalt), buildSigns(data.buildings, ground, onRoad), buildLandmarks(data.pois, ground, data.areas ?? []));
+const signals = buildSignals(city, onAsphalt);
 const occupancy = rasterize(data.buildings, data.trees ?? []);
 ctx.scene.add(buildStalls(city, ground, (x, z) => probe(x, z) !== null || boxesAround(occupancy, x, z, 0.5).length > 4)); // off other carriageways and not against a wall (4 = the grid's own border boxes)
 const parked = buildParkedBikes(city, ground, (x, z) => probe(x, z, 0.6) !== null || boxesAround(occupancy, x, z, 0.3).length > 4, (x, z) => boxesAround(occupancy, x, z, 2.5).length > 4); // on the sidewalk, in front of a building

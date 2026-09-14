@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { wallQuads, flatCap, hipRoof, towerRing, frontSide, fence, yard, pillars, offsetRing, bandUnits, canopy } from './buildings';
+import purwokerto from '../../public/purwokerto.json';
+import { clearRoads, corridorEscape, orientedBox, type CityData } from '../world/osm';
+import { wallQuads, flatCap, hipRoof, towerRing, frontSide, fence, yard, pillars, offsetRing, bandUnits, canopy, fitFront, fitBox } from './buildings';
 
 const ys = (p: number[]) => p.filter((_, i) => i % 3 === 1);
 
@@ -71,20 +73,23 @@ describe('towerRing', () => {
 
 describe('frontSide + fence + yard + pillars', () => {
   const box = { cx: 0, cz: 0, ux: 1, uz: 0, long: 10, short: 6 };
-  // road to the +z side: probe at z = 8 is 2 m short of a corridor edge at z = 10 → escape (0, +2), kerb line at z = 3 + 5 + 2 − 0.5
-  const f = frontSide(box, (_x, z) => (z > 5 ? [0, 2] : null))!;
-  it('kerb line sits 0.5 m outside the corridor edge on the road-facing side', () => {
-    expect(f.fz).toBeCloseTo(9.5);
-    expect(f.off).toBeCloseTo(6.5);
+  // road corridor to the +z side, edge at z = 6: walking out from the box side at z = 3 first hits it at 3.0 m,
+  // so the last clear step is 2.5 and the kerb line lands 0.2 m short of it → off 2.3, fz 5.3
+  const f = frontSide(box, (_x, z) => z >= 6)!;
+  it('puts the kerb line at the measured gap, on the road-facing side', () => {
+    expect(f.off).toBeCloseTo(2.3);
+    expect(f.fz).toBeCloseTo(5.3);
     expect(f.nx).toBeCloseTo(0); expect(f.nz).toBeCloseTo(1);
-    expect(frontSide(box, () => null)).toBeNull();
-    expect(frontSide(box, (_x, z) => (z > 5 ? [0, -6] : null))!.off).toBeCloseTo(0.8); // probe deep inside a corridor: never closer than 0.8 m
+    expect(frontSide(box, () => false)).toBeNull(); // no road anywhere
+    expect(frontSide(box, (_x, z) => z >= 20)).toBeNull(); // a road, but further than YARD: this side does not front it
+    expect(frontSide(box, (_x, z) => z >= 2)).toBeNull(); // the box side is itself inside the corridor
+    expect(frontSide(box, (_x, z) => z >= 3.5)!.off).toBe(0); // a ruko built out to the kerb still fronts the street
   });
   it('fence spans the front with a gate gap', () => {
     const g = fence(f, 0);
     const zs = g.positions.filter((_, i) => i % 3 === 2);
-    expect(Math.min(...zs)).toBeCloseTo(9.4);
-    expect(Math.max(...zs)).toBeCloseTo(9.6);
+    expect(Math.min(...zs)).toBeCloseTo(5.2);
+    expect(Math.max(...zs)).toBeCloseTo(5.4);
     expect(Math.max(...g.positions.filter((_, i) => i % 3 === 1))).toBeCloseTo(1.35);
     const xs = g.positions.filter((_, i) => i % 3 === 0);
     expect(Math.min(...xs)).toBeCloseTo(-5);
@@ -95,7 +100,7 @@ describe('frontSide + fence + yard + pillars', () => {
     const y = yard(f, () => 0);
     const zs = y.positions.filter((_, i) => i % 3 === 2);
     expect(Math.min(...zs)).toBeCloseTo(3);
-    expect(Math.max(...zs)).toBeCloseTo(9.5);
+    expect(Math.max(...zs)).toBeCloseTo(5.3);
     const p = pillars(f, 0, 2.2);
     expect(p.positions).toHaveLength(3 * 20 * 3);
     const pz = p.positions.filter((_, i) => i % 3 === 2);
@@ -114,11 +119,51 @@ describe('bandUnits', () => {
 });
 
 describe('canopy', () => {
-  it('slopes from the wall down to a lipped outer edge, never past the kerb', () => {
-    const g = canopy({ fx: 0, fz: 4, tx: 1, tz: 0, half: 5, nx: 0, nz: 1, off: 1.5 }, 3.2);
+  it('slopes from the wall out to a lipped edge `reach` metres away', () => {
+    const g = canopy({ fx: 0, fz: 4, tx: 1, tz: 0, half: 5, nx: 0, nz: 1, off: 1.5 }, 3.2, 2.6);
     const zs = g.positions.filter((_, i) => i % 3 === 2);
-    expect(Math.max(...zs)).toBeCloseTo(4); // the lip stops at the kerb line, not beyond it
-    expect(Math.min(...zs)).toBeCloseTo(2.5); // the wall
+    expect(Math.min(...zs)).toBeCloseTo(2.5); // the wall, off behind the kerb line
+    expect(Math.max(...zs)).toBeCloseTo(5.1); // reach past it: a kanopi is allowed over the trotoar
     expect(Math.min(...ys(g.positions))).toBeCloseTo(3.2 - 0.35 - 0.18);
+  });
+});
+
+describe('nothing but the road on the road', () => {
+  const real = purwokerto as unknown as CityData;
+  const buildings = clearRoads(real);
+  const probe = corridorEscape(real);
+  const onRoad = (x: number, z: number) => probe(x, z) !== null; // inside the corridor: asphalt plus kerb and trotoar
+  const onAsphalt = (x: number, z: number) => probe(x, z, 1.4) !== null; // past the kerb: out on the carriageway
+  const hits = (ring: [number, number][]) => ring.some((p, i) => {
+    const q = ring[(i + 1) % ring.length];
+    const n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) * 2));
+    for (let k = 0; k <= n; k++) if (onAsphalt(p[0] + ((q[0] - p[0]) * k) / n, p[1] + ((q[1] - p[1]) * k) / n)) return true;
+    return false;
+  });
+  const boxRing = ({ cx, cz, ux, uz, long, short }: ReturnType<typeof orientedBox>, o: number): [number, number][] => {
+    const [L, S] = [long / 2 + o, short / 2 + o];
+    return ([[-L, -S], [L, -S], [L, S], [-L, S]] as const).map(([u, v]): [number, number] => [cx + ux * u - uz * v, cz + uz * u + ux * v]);
+  };
+
+  it('keeps every fitted roof, emper, pagar, halaman and kanopi off the carriageway', () => {
+    const bad = { roof: 0, emper: 0, front: 0, kanopi: 0 };
+    for (const b of buildings) {
+      if (b.p.length < 3) continue;
+      const box = orientedBox(b.p);
+      if (b.r === 'hip' || b.r === 'gable') {
+        const eaves = fitBox(box, 0.6, onAsphalt); // null falls back to a flat cap over the footprint, which clearRoads already cleared
+        if (eaves && hits(boxRing(eaves, 0.6))) bad.roof++;
+        const skirt = eaves && b.h <= 3.2 && box.short >= 7 ? fitBox(box, 2.2, onAsphalt) : null;
+        if (skirt && hits(boxRing(skirt, 2.2))) bad.emper++;
+      }
+      const raw = frontSide(box, onRoad);
+      const f = raw && fitFront(raw, onRoad);
+      if (!f) continue;
+      const at = (s: number, out: number): [number, number] => [f.fx + f.tx * s - f.nx * (f.off - out), f.fz + f.tz * s - f.nz * (f.off - out)];
+      if (hits([at(-f.half, 0), at(f.half, 0), at(f.half, f.off), at(-f.half, f.off)])) bad.front++; // the halaman spans pagar to wall, so it covers both
+      const reach = Math.min(2.6, f.off + 1.2); // the kanopi, which is allowed over the trotoar but not the asphalt
+      if (!b.r && !b.civic && b.h <= 9.6 && box.short <= 40 && hits([at(-f.half, 0), at(f.half, 0), at(f.half, reach), at(-f.half, reach)])) bad.kanopi++;
+    }
+    expect(bad).toEqual({ roof: 0, emper: 0, front: 0, kanopi: 0 });
   });
 });
