@@ -56,7 +56,7 @@ describe('stepCar', () => {
     expect(braked.speed).toBeCloseTo(0, 1);
     expect(braked.speed).toBeLessThan(coast.speed);
   });
-  it('NOS doubles top speed, burns out after its charge, and refills every 30 s', () => {
+  it('NOS doubles top speed, burns out after its charge, and refills gradually over 8 s', () => {
     const nos = { ...idle, throttle: 1, nos: true };
     const boosted = run(rest, nos, NOS_DURATION - 0.5);
     expect(boosted.speed).toBeGreaterThan(MAX_SPEED * 1.5);
@@ -64,6 +64,8 @@ describe('stepCar', () => {
     expect(spent.nos).toBe(0);
     expect(spent.speed).toBeLessThan(boosted.speed); // charge gone, drag pulls it back to the normal cap
     expect(run(spent, nos, 1).speed).toBeLessThanOrEqual(MAX_SPEED);
+    expect(run(spent, nos, 2).nos).toBe(0); // holding the key on an empty tank never recharges
+    expect(run(spent, idle, NOS_PERIOD / 2).nos).toBeCloseTo(NOS_DURATION / 2, 1); // gradual, not a snap back to full
     expect(run(spent, idle, NOS_PERIOD).nos).toBe(NOS_DURATION);
   });
 });
