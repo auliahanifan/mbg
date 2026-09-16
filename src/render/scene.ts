@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { daylight } from './daylight';
-import type { Quality } from './quality';
 
 export interface SceneCtx {
   renderer: THREE.WebGLRenderer;
@@ -10,15 +9,16 @@ export interface SceneCtx {
   sun: THREE.DirectionalLight;
   sunDir: THREE.Vector3;
   setTime: (hour: number) => void;
-  applyQuality: (q: Quality) => void;
 }
 
 export const START_HOUR = 10; // the clock starts here and runs from there
 const HAZE = 0xb9c4cf; // horizon haze; fog colour, matches the sky at the horizon under tone mapping
 
-export function createScene(canvas: HTMLCanvasElement, quality: Quality): SceneCtx {
+export function createScene(canvas: HTMLCanvasElement): SceneCtx {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); // GTAO + bloom at 2x retina drops below 45 fps; SMAA hides the difference
   renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
@@ -75,29 +75,18 @@ export function createScene(canvas: HTMLCanvasElement, quality: Quality): SceneC
   const sun = new THREE.DirectionalLight(0xffd9a8, 3.2);
   sun.position.copy(sunDir).multiplyScalar(80);
   sun.castShadow = true;
+  sun.shadow.mapSize.set(4096, 4096);
+  const s = 60;
+  sun.shadow.camera.left = -s;
+  sun.shadow.camera.right = s;
+  sun.shadow.camera.top = s;
+  sun.shadow.camera.bottom = -s;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 250;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
   sun.shadow.radius = 2;
   scene.add(sun, sun.target);
-
-  // the one place the render budget touches the scene: buffer resolution and how much shadow detail the sun carries
-  const applyQuality = (q: Quality) => {
-    renderer.shadowMap.enabled = q.shadows;
-    renderer.setPixelRatio(Math.min(devicePixelRatio, q.pixelRatio));
-    renderer.setSize(innerWidth, innerHeight);
-    sun.shadow.mapSize.setScalar(q.shadowMapSize);
-    sun.shadow.map?.dispose(); // three only reads mapSize when it allocates, so drop the old target
-    sun.shadow.map = null;
-    const c = sun.shadow.camera;
-    c.left = -q.shadowBox;
-    c.right = q.shadowBox;
-    c.top = q.shadowBox;
-    c.bottom = -q.shadowBox;
-    c.updateProjectionMatrix();
-  };
-  applyQuality(quality);
 
   // the whole sky/light rig follows the clock; the chase camera keeps the shadow box on the car
   const setTime = (hour: number) => {
@@ -120,5 +109,5 @@ export function createScene(canvas: HTMLCanvasElement, quality: Quality): SceneC
     renderer.setSize(innerWidth, innerHeight);
   });
 
-  return { renderer, scene, camera, sun, sunDir, setTime, applyQuality };
+  return { renderer, scene, camera, sun, sunDir, setTime };
 }

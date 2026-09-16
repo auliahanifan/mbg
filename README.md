@@ -15,20 +15,6 @@ Script data OSM (`node scripts/fetch-osm.mjs`) butuh Node ≥ 23.6 (type strippi
 Kontrol: W/A/S/D atau panah, Spasi rem, H klakson, M bisu, R ulang ronde.
 Untuk melihat sudut kota tertentu saat mengembangkan: `http://localhost:5173/?at=x,z,heading` (meter dari pusat peta, heading radian).
 
-## Kualitas gambar
-
-Game mulai dari tampilan penuh lalu **turun sendiri** kalau komputernya tidak kuat: tiap ~1,5 detik
-median waktu frame diukur, dan begitu tembus 24 ms (~42 fps) satu tingkat dilepas. Urutannya dari yang
-paling mahal per tampilan yang didapat — GTAO dulu (lebih dari separuh waktu frame), lalu bloom, lalu
-resolusi, lalu SMAA, dan bayangan hanya di tingkat terakhir. Turunnya searah saja; naik lagi cuma
-bikin goyang bolak-balik.
-
-Diukur di Apple M2, 1200x593 — 27,8 / 10,8 / 7,8 / 6,6 ms GPU per frame untuk tingkat 0–3. Makin berat
-GPU-nya makin lebar jaraknya: di 2400x648 tingkat 0 jadi 54 ms sementara tingkat 1 tetap 10,4 ms, jadi
-5,2x, bukan 2,6x.
-
-Paksa satu tingkat dengan `?q=`: `?q=high` (0, tampilan penuh), `?q=low` (1), atau `?q=0`..`?q=3`.
-
 ## Kota
 
 Semuanya berangkat dari data, bukan ingatan: kalau peta diam, game-nya juga tidak mengarang.

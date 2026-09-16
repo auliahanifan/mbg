@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { createScene, START_HOUR } from './render/scene';
 import { createPost } from './render/post';
-import { startQuality, watchQuality } from './render/quality';
 import { buildGapura, buildPoles, buildRoads, buildStalls, streetTrees } from './render/roads';
 import { buildBuildings } from './render/buildings';
 import { buildLandmarks } from './render/landmarks';
@@ -30,9 +29,8 @@ import { spawnPeople, stepPeople, peopleCircles, hitPerson } from './people/peop
 import { createPeopleRenderer } from './people/peopleRenderer';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
-const ctx = createScene(canvas, startQuality);
-const post = createPost(ctx, startQuality);
-const stepQuality = watchQuality((q) => { ctx.applyQuality(q); post.apply(q); }); // renderer resizes first, then the chain rebuilds at the new buffer size
+const ctx = createScene(canvas);
+const post = createPost(ctx);
 const [data, dem]: [CityData, Dem] = await Promise.all([fetch('/purwokerto.json').then((r) => r.json()), fetch('/dem.json').then((r) => r.json())]);
 const city = loadCity(data);
 data.buildings = clearRoads(data); // footprints off the asphalt, before anything renders or collides with them
@@ -112,5 +110,4 @@ ctx.renderer.setAnimationLoop(() => {
   sound.update(car, input, quest, isDown('KeyH'), traffic, ctx.camera);
   chase.update(car, dt);
   post.render();
-  stepQuality(dt);
 });
